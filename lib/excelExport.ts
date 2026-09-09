@@ -167,12 +167,17 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
   function addWorksheetWithStyling(
     title: string,
     items: CandidateRecord[],
-    colorHex: string
+    colorHex: string,
+    isMaster = false,
+    recToMasterRowMap?: Map<CandidateRecord, number>
   ) {
     const ws = wb.addWorksheet(title, {
       properties: { tabColor: { argb: colorHex } },
     });
     ws.columns = columnsDef;
+
+    // Set number formats for date/time column (Interview Schedule)
+    ws.getColumn(12).numFmt = "@"; // Text format preserve DD/MM/YYYY, HH:MM AM/PM
 
     // 1. Style Header Row (Row 1)
     const headerRow = ws.getRow(1);
@@ -206,29 +211,84 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
 
     // 2. Add Data Rows
     items.forEach((rec, rIdx) => {
-      const row = ws.addRow({
-        sNo: rIdx + 1,
-        candidateName: rec.candidateName || "",
-        email: rec.email || "",
-        contactNumber: rec.contactNumber || "",
-        roleAppliedFor: rec.roleAppliedFor || "General",
-        yearsOfExperience: rec.yearsOfExperience || "",
-        currentCtc: rec.currentCtc || "",
-        expectedCtc: rec.expectedCtc || "",
-        noticePeriod: rec.noticePeriod || "",
-        notes: rec.notes || "",
-        reasonForLeaving: rec.reasonForLeaving || "",
-        interviewSchedule: rec.interviewSchedule || "",
-        status: rec.status || "Under Review",
-        offerStatus: rec.offerStatus || "Pending",
-        addedTimestamp: rec.addedTimestamp || "",
-      });
+      let rowValues: any;
 
+      if (isMaster || !recToMasterRowMap) {
+        if (recToMasterRowMap) {
+          recToMasterRowMap.set(rec, rIdx + 2); // Row 1 is header, Row 2 is first candidate
+        }
+        rowValues = {
+          sNo: rIdx + 1,
+          candidateName: rec.candidateName || "",
+          email: rec.email || "",
+          contactNumber: rec.contactNumber || "",
+          roleAppliedFor: rec.roleAppliedFor || "General",
+          yearsOfExperience: rec.yearsOfExperience || "",
+          currentCtc: rec.currentCtc || "",
+          expectedCtc: rec.expectedCtc || "",
+          noticePeriod: rec.noticePeriod || "",
+          notes: rec.notes || "",
+          reasonForLeaving: rec.reasonForLeaving || "",
+          interviewSchedule: rec.interviewSchedule || "",
+          status: rec.status || "Under Review",
+          offerStatus: rec.offerStatus || "Pending",
+          addedTimestamp: rec.addedTimestamp || "",
+        };
+      } else {
+        // Dynamic Excel Formula Linking to 'All Candidates' Master Sheet
+        const masterRow = recToMasterRowMap.get(rec) || (rIdx + 2);
+        rowValues = {
+          sNo: { formula: `'All Candidates'!A${masterRow}`, result: rIdx + 1 },
+          candidateName: { formula: `'All Candidates'!B${masterRow}`, result: rec.candidateName || "" },
+          email: { formula: `'All Candidates'!C${masterRow}`, result: rec.email || "" },
+          contactNumber: { formula: `'All Candidates'!D${masterRow}`, result: rec.contactNumber || "" },
+          roleAppliedFor: { formula: `'All Candidates'!E${masterRow}`, result: rec.roleAppliedFor || "General" },
+          yearsOfExperience: { formula: `'All Candidates'!F${masterRow}`, result: rec.yearsOfExperience || "" },
+          currentCtc: { formula: `'All Candidates'!G${masterRow}`, result: rec.currentCtc || "" },
+          expectedCtc: { formula: `'All Candidates'!H${masterRow}`, result: rec.expectedCtc || "" },
+          noticePeriod: { formula: `'All Candidates'!I${masterRow}`, result: rec.noticePeriod || "" },
+          notes: { formula: `'All Candidates'!J${masterRow}`, result: rec.notes || "" },
+          reasonForLeaving: { formula: `'All Candidates'!K${masterRow}`, result: rec.reasonForLeaving || "" },
+          interviewSchedule: { formula: `'All Candidates'!L${masterRow}`, result: rec.interviewSchedule || "" },
+          status: { formula: `'All Candidates'!M${masterRow}`, result: rec.status || "Under Review" },
+          offerStatus: { formula: `'All Candidates'!N${masterRow}`, result: rec.offerStatus || "Pending" },
+          addedTimestamp: { formula: `'All Candidates'!O${masterRow}`, result: rec.addedTimestamp || "" },
+        };
+      }
+
+      const row = ws.addRow(rowValues);
       row.height = 22;
       const isEven = rIdx % 2 === 0;
       const rowBg = isEven ? "FFFFFFFF" : "FFF8FAFC";
 
-      row.eachCell((cell, colNumber) => {
+      // Native Dropdown Data Validations in Excel
+      row.getCell(13).dataValidation = {
+        type: "list",
+        allowBlank: true,
+        formulae: ['"Under Review,Selected,Rejected"'],
+        showErrorMessage: true,
+        errorTitle: "Invalid Status",
+        error: "Please select Under Review, Selected, or Rejected.",
+      };
+
+      row.getCell(14).dataValidation = {
+        type: "list",
+        allowBlank: true,
+        formulae: ['"Pending,Accepted,Rejected"'],
+        showErrorMessage: true,
+        errorTitle: "Invalid Offer Status",
+        error: "Please select Pending, Accepted, or Rejected.",
+      };
+
+      row.getCell(12).dataValidation = {
+        type: "custom",
+        allowBlank: true,
+        formulae: ["TRUE"],
+        promptTitle: "Interview Schedule",
+        prompt: "Format: DD/MM/YYYY, HH:MM AM/PM",
+      };
+
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         cell.font = {
           name: "Segoe UI",
           size: 10,
@@ -257,12 +317,15 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
   }
 
   const sheetNames = new Set<string>();
+  const recToMasterRowMap = new Map<CandidateRecord, number>();
 
-  // 1. "All Candidates" Master Sheet
+  // 1. "All Candidates" Master Sheet (Parent Single Source of Truth)
   addWorksheetWithStyling(
     "All Candidates",
     records,
-    ROLE_COLORS["all candidates"]
+    ROLE_COLORS["all candidates"],
+    true,
+    recToMasterRowMap
   );
   sheetNames.add("all candidates");
 
@@ -278,12 +341,18 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
     roleGroups[roleKey].push(rec);
   }
 
-  // 3. Create a worksheet for each unique Role
+  // 3. Create dynamic linked subpage for each unique Role
   let colorCounter = 1;
   for (const [roleName, roleRecords] of Object.entries(roleGroups)) {
     const sheetTitle = sanitizeSheetName(roleName, sheetNames);
     const color = getColorForRole(roleName, colorCounter++);
-    addWorksheetWithStyling(sheetTitle, roleRecords, color);
+    addWorksheetWithStyling(
+      sheetTitle,
+      roleRecords,
+      color,
+      false,
+      recToMasterRowMap
+    );
   }
 
   return wb;

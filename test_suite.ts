@@ -187,6 +187,15 @@ async function runTestSuite() {
   assert(allWs?.getRow(1).getCell(14).value === "Offer Status", "Header 14 is spelled 'Offer Status'");
   assert(allWs?.getRow(1).getCell(15).value === "Added On", "Header 15 is spelled 'Added On'");
 
+  // Verify Native Excel Dropdowns (Data Validations)
+  assert(allWs?.getCell("M2").dataValidation?.type === "list", "Status column has native Excel dropdown data validation (type: list)");
+  assert(allWs?.getCell("N2").dataValidation?.type === "list", "Offer Status column has native Excel dropdown data validation (type: list)");
+
+  // Verify Dynamic Formula Interconnection between Master Sheet and Role Subpages
+  const fsWs = styledWb.getWorksheet("Full Stack Developer");
+  const childFormula = (fsWs?.getCell("M2").value as any)?.formula;
+  assert(Boolean(childFormula && childFormula.includes("'All Candidates'!")), "Role subpage links dynamically to 'All Candidates' via Excel formula");
+
   // 7. Live SharePoint Direct Sync Engine
   console.log("\n--- TEST GROUP 7: Live SharePoint Direct Sync Engine ---");
   const connInfo = await testSharePointConnection();
