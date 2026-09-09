@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { extractText } from "unpdf";
 import mammoth from "mammoth";
 
@@ -126,37 +125,50 @@ Provide your answer ONLY in valid JSON matching this exact structure:
   "notes": "brief summary of top skills, degrees, or notable achievements"
 }`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey.trim()}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-      },
-    }),
-  });
+  const models = ["gemini-3.6-flash", "gemini-flash-latest"];
+  let lastError: any = null;
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Gemini API error [${res.status}]: ${errText}`);
+  for (const model of models) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Gemini [${model}] status ${res.status}: ${errText}`);
+      }
+
+      const data = await res.json();
+      const contentText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+      const parsed = JSON.parse(contentText);
+
+      return {
+        candidateName: parsed.candidateName || "",
+        email: parsed.email || "",
+        contactNumber: parsed.contactNumber || "",
+        roleAppliedFor: parsed.roleAppliedFor || "",
+        yearsOfExperience: String(parsed.yearsOfExperience || ""),
+        currentCtc: parsed.currentCtc || "",
+        expectedCtc: parsed.expectedCtc || "",
+        noticePeriod: parsed.noticePeriod || "",
+        notes: parsed.notes || "",
+      };
+    } catch (err: any) {
+      lastError = err;
+      // Wait briefly before trying next model
+      await new Promise((r) => setTimeout(r, 600));
+    }
   }
 
-  const data = await res.json();
-  const contentText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-  const parsed = JSON.parse(contentText);
-
-  return {
-    candidateName: parsed.candidateName || "",
-    email: parsed.email || "",
-    contactNumber: parsed.contactNumber || "",
-    roleAppliedFor: parsed.roleAppliedFor || "",
-    yearsOfExperience: String(parsed.yearsOfExperience || ""),
-    currentCtc: parsed.currentCtc || "",
-    expectedCtc: parsed.expectedCtc || "",
-    noticePeriod: parsed.noticePeriod || "",
-    notes: parsed.notes || "",
-  };
+  throw lastError || new Error("All Gemini models failed");
 }
