@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { Sparkles, KeyRound, FileCheck } from "lucide-react";
+import { Sparkles, KeyRound, FileCheck, ExternalLink } from "lucide-react";
+
+export const LIVE_EXCEL_DB_URL =
+  "https://akoimarketing-my.sharepoint.com/:x:/g/personal/career_akoi_in/IQD4TYUI8Xz1SJ4qcHes2gJFAbb78vco-WIisH_YTS9jS1g?e=lUvVIX";
 
 interface Screen01UploadProps {
   onFilesSelected: (files: File[]) => void;
@@ -53,6 +56,10 @@ export default function Screen01Upload({
         onFilesSelected(filesArr);
       }
     }
+  };
+
+  const handleGoToLiveExcel = () => {
+    window.open(LIVE_EXCEL_DB_URL, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -144,13 +151,14 @@ export default function Screen01Upload({
               </span>
             </div>
 
-            {/* Green Bordered Button: Go to Excel DB */}
+            {/* Green Bordered Button: Go to Excel DB (Redirects to Live SharePoint Excel) */}
             <div className="flex flex-col items-center">
               <button
-                onClick={onOpenExcelDb}
-                className="w-56 py-3.5 px-6 rounded-xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-[#15803D] font-medium text-base border-2 border-[#16A34A] shadow-sm transition-all duration-150"
+                onClick={handleGoToLiveExcel}
+                className="w-56 py-3.5 px-6 rounded-xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-[#15803D] font-medium text-base border-2 border-[#16A34A] shadow-sm transition-all duration-150 flex items-center justify-center gap-2"
               >
-                Go to Excel DB
+                <span>Go to Excel DB</span>
+                <ExternalLink className="w-4 h-4 text-[#16A34A]" />
               </button>
               <span className="text-xs text-transparent mt-2 select-none">
                 db link
@@ -161,8 +169,15 @@ export default function Screen01Upload({
       </main>
 
       {/* Footer */}
-      <footer className="w-full py-4 text-center text-xs text-gray-400">
-        Standalone HR Resume Parser • Deployable to Vercel
+      <footer className="w-full py-4 text-center text-xs text-gray-400 flex items-center justify-center gap-4">
+        <span>Standalone HR Resume Parser • Deployable to Vercel</span>
+        <span>•</span>
+        <button
+          onClick={onOpenExcelDb}
+          className="text-gray-500 hover:text-gray-700 underline"
+        >
+          View Local DB Inspector
+        </button>
       </footer>
     </div>
   );

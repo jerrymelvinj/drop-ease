@@ -92,7 +92,7 @@ export default function Home() {
   // Screen 01 -> File Selection
   const handleFilesSelected = (selectedFiles: File[]) => {
     const newItems: UploadedFileItem[] = selectedFiles.map((f, idx) => ({
-      id: `${f.name}-${Date.now()}-${idx}`,
+      id: `${f.name}-${Date.now()}-${idx}-${Math.random()}`,
       file: f,
       name: f.name,
       sizeFormatted: formatFileSize(f.size),
@@ -101,19 +101,30 @@ export default function Home() {
     setCurrentScreen("staging");
   };
 
-  // Screen 01 -> Load Demo Samples
+  // Screen 01 -> Load Demo Samples (Loads 10 test resumes)
   const handleLoadDemoSamples = async () => {
     try {
-      const samples = [
-        { name: "jane_doe_software_engineer.pdf", type: "application/pdf" },
-        { name: "alex_smith_data_scientist.docx", type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+      const sampleNames = [
+        "jane_doe_software_engineer.pdf",
+        "alex_smith_data_scientist.docx",
+        "sarah_connor_devops_engineer.pdf",
+        "michael_chen_product_manager.pdf",
+        "emily_watson_frontend_engineer.docx",
+        "david_miller_cloud_architect.pdf",
+        "rachel_green_ui_ux_designer.docx",
+        "bruce_wayne_security_specialist.pdf",
+        "clark_kent_technical_lead.docx",
+        "peter_parker_backend_developer.pdf",
       ];
 
       const loadedFiles: File[] = [];
-      for (const s of samples) {
-        const res = await fetch(`/sample_resumes/${s.name}`);
+      for (const name of sampleNames) {
+        const res = await fetch(`/sample_resumes/${name}`);
         const blob = await res.blob();
-        const file = new File([blob], s.name, { type: s.type });
+        const type = name.endsWith(".pdf")
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        const file = new File([blob], name, { type });
         loadedFiles.push(file);
       }
       handleFilesSelected(loadedFiles);
@@ -125,7 +136,7 @@ export default function Home() {
   // Screen 02 -> Add more files
   const handleAddMoreFiles = (newFiles: File[]) => {
     const newItems: UploadedFileItem[] = newFiles.map((f, idx) => ({
-      id: `${f.name}-${Date.now()}-${idx}`,
+      id: `${f.name}-${Date.now()}-${idx}-${Math.random()}`,
       file: f,
       name: f.name,
       sizeFormatted: formatFileSize(f.size),
@@ -133,39 +144,59 @@ export default function Home() {
     setFiles((prev) => [...prev, ...newItems]);
   };
 
-  // Screen 02 -> Remove single file
+  // Screen 02 -> Remove single file (Auto-redirects to Screen 01 if 0 files remain)
   const handleRemoveFile = (id: string) => {
-    setFiles((prev) => prev.filter((f) => f.id !== id));
+    setFiles((prev) => {
+      const updated = prev.filter((f) => f.id !== id);
+      if (updated.length === 0) {
+        setCurrentScreen("upload");
+      }
+      return updated;
+    });
   };
 
-  // Screen 02 -> Trigger Data Extraction
+  // Screen 02 -> Trigger Data Extraction (Chunked into batches to safely support 10+ entries)
   const handleExtractData = async () => {
     if (files.length === 0) return;
     setIsExtracting(true);
 
     try {
-      const formData = new FormData();
-      files.forEach((item) => {
-        formData.append("files", item.file);
-      });
-      if (apiKey) {
-        formData.append("apiKey", apiKey);
+      const BATCH_SIZE = 4;
+      const allExtractedRecords: CandidateRecord[] = [];
+
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        const batch = files.slice(i, i + BATCH_SIZE);
+        const formData = new FormData();
+        batch.forEach((item) => {
+          formData.append("files", item.file);
+        });
+        if (apiKey) {
+          formData.append("apiKey", apiKey);
+        }
+
+        const res = await fetch("/api/extract", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          throw new Error(`Extraction batch error: server returned ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (data.records && Array.isArray(data.records)) {
+          allExtractedRecords.push(...data.records);
+        }
       }
 
-      const res = await fetch("/api/extract", {
-        method: "POST",
-        body: formData,
-      });
+      // Re-index sNo
+      const reindexed = allExtractedRecords.map((r, idx) => ({
+        ...r,
+        sNo: idx + 1,
+      }));
 
-      if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
-      }
-
-      const data = await res.json();
-      if (data.records && Array.isArray(data.records)) {
-        setRecords(data.records);
-        setCurrentScreen("review");
-      }
+      setRecords(reindexed);
+      setCurrentScreen("review");
     } catch (err: any) {
       console.error("Extraction error:", err);
       alert(`Error extracting resume details: ${err.message}`);
@@ -190,8 +221,8 @@ export default function Home() {
     });
   };
 
-  // Screen 03 -> Export to Excel with role segregation & deduplication
-  const handleExportToExcel = () => {
+  // Screen 03 -> "Export to Excel" CTA: Acts as Save to Database Action (NO automatic file download)
+  const handleSaveToDatabase = () => {
     if (records.length === 0) return;
 
     // Deduplicate against existing DB
@@ -208,11 +239,8 @@ export default function Home() {
       console.warn("Could not save to localStorage", e);
     }
 
-    // Trigger Excel download
-    downloadExcelDatabase(merged, "hr_candidates_db.xlsx");
-
-    const message = `Successfully exported to Excel! ${addedCount} candidate record(s) added.${
-      duplicateCount > 0 ? ` (${duplicateCount} duplicate(s) skipped)` : ""
+    const message = `Saved to Database! ${addedCount} candidate record(s) added.${
+      duplicateCount > 0 ? ` (${duplicateCount} duplicate(s) omitted)` : ""
     }`;
     setExportSuccessMessage(message);
 
@@ -221,9 +249,14 @@ export default function Home() {
     }, 6000);
   };
 
+  // Secondary option: Download offline .xlsx file
+  const handleDownloadLocalBackup = () => {
+    downloadExcelDatabase(database, "hr_candidates_db.xlsx");
+  };
+
   // Import records from external Excel file
   const handleImportRecords = (imported: CandidateRecord[]) => {
-    const { merged, addedCount, duplicateCount } = mergeCandidatesDeduplicated(
+    const { merged, addedCount } = mergeCandidatesDeduplicated(
       database,
       imported
     );
@@ -269,14 +302,15 @@ export default function Home() {
         />
       )}
 
-      {/* Screen 03: Review Table & Excel Export */}
+      {/* Screen 03: Review Table & Excel Save */}
       {currentScreen === "review" && (
         <Screen03ReviewTable
           records={records}
           onUpdateRecord={handleUpdateRecord}
           onBack={() => setCurrentScreen("staging")}
           onOpenExcelDb={() => setIsExcelDbOpen(true)}
-          onExportToExcel={handleExportToExcel}
+          onSaveToDatabase={handleSaveToDatabase}
+          onDownloadLocalBackup={handleDownloadLocalBackup}
           exportSuccessMessage={exportSuccessMessage}
         />
       )}

@@ -8,6 +8,7 @@ import {
 import { CandidateRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function getFormattedTimestamp(): string {
   const now = new Date();
@@ -30,40 +31,60 @@ export async function POST(req: NextRequest) {
 
     const records: CandidateRecord[] = [];
 
+    // Process files with individual error handling
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const rawText = await extractTextFromFileBuffer(buffer, file.name);
+      try {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const rawText = await extractTextFromFileBuffer(buffer, file.name);
 
-      let parsed: ParsedCandidateData;
-      let usedGemini = false;
+        let parsed: ParsedCandidateData;
+        let usedGemini = false;
 
-      if (activeApiKey && rawText.trim()) {
-        try {
-          parsed = await parseResumeWithGemini(rawText, activeApiKey);
-          usedGemini = true;
-        } catch (llmErr) {
-          console.warn(`Gemini extraction failed for ${file.name}, using fallback heuristics:`, llmErr);
+        if (activeApiKey && rawText.trim()) {
+          try {
+            parsed = await parseResumeWithGemini(rawText, activeApiKey);
+            usedGemini = true;
+          } catch (llmErr) {
+            console.warn(`Gemini extraction failed for ${file.name}, using fallback heuristics:`, llmErr);
+            parsed = parseResumeWithHeuristics(rawText);
+          }
+        } else {
           parsed = parseResumeWithHeuristics(rawText);
         }
-      } else {
-        parsed = parseResumeWithHeuristics(rawText);
-      }
 
-      records.push({
-        sNo: i + 1,
-        candidateName: parsed.candidateName || file.name.replace(/\.[^/.]+$/, ""),
-        email: parsed.email || "",
-        contactNumber: parsed.contactNumber || "",
-        roleAppliedFor: parsed.roleAppliedFor || "Full Stack Developer",
-        yearsOfExperience: parsed.yearsOfExperience || "",
-        currentCtc: parsed.currentCtc || "",
-        expectedCtc: parsed.expectedCtc || "",
-        noticePeriod: parsed.noticePeriod || "",
-        notes: parsed.notes || "",
-        addedTimestamp: getFormattedTimestamp(),
-        fileName: file.name,
-      });
+        records.push({
+          sNo: i + 1,
+          candidateName: parsed.candidateName || file.name.replace(/\.[^/.]+$/, ""),
+          email: parsed.email || "",
+          contactNumber: parsed.contactNumber || "",
+          roleAppliedFor: parsed.roleAppliedFor || "Full Stack Developer",
+          yearsOfExperience: parsed.yearsOfExperience || "",
+          currentCtc: parsed.currentCtc || "",
+          expectedCtc: parsed.expectedCtc || "",
+          noticePeriod: parsed.noticePeriod || "",
+          notes: parsed.notes || "",
+          addedTimestamp: getFormattedTimestamp(),
+          fileName: file.name,
+        });
+      } catch (fileErr: any) {
+        console.error(`Error processing file ${file.name}:`, fileErr);
+        // Fallback placeholder rather than failing entire batch
+        records.push({
+          sNo: i + 1,
+          candidateName: file.name.replace(/\.[^/.]+$/, ""),
+          email: "",
+          contactNumber: "",
+          roleAppliedFor: "General",
+          yearsOfExperience: "",
+          currentCtc: "",
+          expectedCtc: "",
+          noticePeriod: "",
+          notes: `Extracted with manual review required: ${fileErr.message}`,
+          addedTimestamp: getFormattedTimestamp(),
+          fileName: file.name,
+        });
+      }
     }
 
     return NextResponse.json({

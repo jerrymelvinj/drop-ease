@@ -38,6 +38,8 @@ const COMMON_ROLE_PATTERNS = [
   /Staff\s+[A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Designer|Manager|Architect|Consultant)/i,
   /Principal\s+[A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Designer|Manager|Architect|Consultant)/i,
   /(?:Software|Full\s*Stack|Frontend|Backend|DevOps|Cloud|Data|Machine\s*Learning|ML|AI|Product|Project|Security|QA)\s+(?:Engineer|Developer|Scientist|Analyst|Manager|Architect|Lead|Specialist)/i,
+  /(?:UI\/UX|Product|Graphic)\s+Designer/i,
+  /(?:Engineering|Product|Project|Operations|Marketing|Sales)\s+Manager/i,
 ];
 
 export function parseResumeWithHeuristics(rawText: string): ParsedCandidateData {
@@ -63,13 +65,28 @@ export function parseResumeWithHeuristics(rawText: string): ParsedCandidateData 
     }
   }
 
-  // 4. Role heuristic
+  // 4. Role heuristic (Extracts applied role or latest/current job title)
   let roleAppliedFor = "";
-  for (const pattern of COMMON_ROLE_PATTERNS) {
-    const match = rawText.match(pattern);
-    if (match) {
-      roleAppliedFor = match[0].trim();
-      break;
+  // Check lines near top (candidate headline / objective)
+  for (const line of lines.slice(0, 8)) {
+    for (const pattern of COMMON_ROLE_PATTERNS) {
+      const match = line.match(pattern);
+      if (match) {
+        roleAppliedFor = match[0].trim();
+        break;
+      }
+    }
+    if (roleAppliedFor) break;
+  }
+
+  // If not found in top lines, search throughout work experience sections
+  if (!roleAppliedFor) {
+    for (const pattern of COMMON_ROLE_PATTERNS) {
+      const match = rawText.match(pattern);
+      if (match) {
+        roleAppliedFor = match[0].trim();
+        break;
+      }
     }
   }
 
@@ -105,6 +122,11 @@ export async function parseResumeWithGemini(
   apiKey: string
 ): Promise<ParsedCandidateData> {
   const prompt = `You are an expert HR recruitment assistant. Extract structured candidate information from the following resume text.
+CRITICAL INSTRUCTIONS FOR "roleAppliedFor":
+- Extract the candidate's current or most recent job title / professional role (e.g. 'Senior Full Stack Engineer', 'Lead Data Scientist', 'Full Stack Developer', 'DevOps Specialist', 'Product Manager').
+- If a target role is specifically mentioned in their header or summary, use that.
+- Otherwise, extract their latest or current designation from their work experience history.
+
 If a field is not explicitly mentioned or cannot be inferred, return an empty string "".
 
 Resume Text:
@@ -117,7 +139,7 @@ Provide your answer ONLY in valid JSON matching this exact structure:
   "candidateName": "Full candidate name",
   "email": "candidate email address",
   "contactNumber": "phone number",
-  "roleAppliedFor": "target designation / primary job role (e.g. Full Stack Developer, Lead Data Scientist)",
+  "roleAppliedFor": "current, most recent, or target designation / primary job role",
   "yearsOfExperience": "number of years or range, e.g. '5' or '7+'",
   "currentCtc": "current salary if stated or ''",
   "expectedCtc": "expected salary if stated or ''",
@@ -165,8 +187,7 @@ Provide your answer ONLY in valid JSON matching this exact structure:
       };
     } catch (err: any) {
       lastError = err;
-      // Wait briefly before trying next model
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 500));
     }
   }
 

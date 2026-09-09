@@ -1,15 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { ArrowLeft, ArrowRightCircle, Check, AlertCircle, FileSpreadsheet, Sparkles } from "lucide-react";
+import { ArrowLeft, Save, Check, ExternalLink, Download } from "lucide-react";
 import { CandidateRecord } from "@/lib/types";
+import { LIVE_EXCEL_DB_URL } from "./Screen01Upload";
 
 interface Screen03ReviewTableProps {
   records: CandidateRecord[];
   onUpdateRecord: (index: number, field: keyof CandidateRecord, value: string) => void;
   onBack: () => void;
   onOpenExcelDb: () => void;
-  onExportToExcel: () => void;
+  onSaveToDatabase: () => void;
+  onDownloadLocalBackup: () => void;
   exportSuccessMessage: string | null;
 }
 
@@ -18,7 +20,8 @@ export default function Screen03ReviewTable({
   onUpdateRecord,
   onBack,
   onOpenExcelDb,
-  onExportToExcel,
+  onSaveToDatabase,
+  onDownloadLocalBackup,
   exportSuccessMessage,
 }: Screen03ReviewTableProps) {
   const [activeCell, setActiveCell] = useState<{ row: number; col: string } | null>(null);
@@ -36,6 +39,10 @@ export default function Screen03ReviewTable({
     { key: "addedTimestamp", label: "Added Timestamp", width: "min-w-[140px]", placeholder: "" },
   ];
 
+  const handleGoToLiveExcel = () => {
+    window.open(LIVE_EXCEL_DB_URL, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="min-h-screen bg-[#F5F6FB] flex flex-col justify-between p-4 sm:p-8 lg:p-12">
       {/* Top Header */}
@@ -44,13 +51,13 @@ export default function Screen03ReviewTable({
           PDFs have been merged!
         </h1>
         <p className="text-xs sm:text-sm text-gray-500 text-center max-w-2xl">
-          Review and edit the extracted candidate information before exporting. All cells are directly editable.
+          Review and edit the extracted candidate information. Click any cell to make manual corrections before saving.
         </p>
 
         {/* Success Alert Banner */}
         {exportSuccessMessage && (
           <div className="mt-4 px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-medium flex items-center gap-2 shadow-sm animate-in fade-in">
-            <Check className="w-4 h-4 text-emerald-600" />
+            <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             <span>{exportSuccessMessage}</span>
           </div>
         )}
@@ -146,21 +153,34 @@ export default function Screen03ReviewTable({
 
         {/* Center Action Buttons */}
         <div className="flex items-center gap-4 flex-wrap justify-center">
-          {/* Go to Excel DB (Green Border) */}
+          {/* Go to Excel DB (Green Border, Redirects to Live SharePoint Excel) */}
           <button
-            onClick={onOpenExcelDb}
-            className="w-52 py-3.5 px-6 rounded-xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-[#15803D] font-medium text-base border-2 border-[#16A34A] shadow-sm transition"
+            onClick={handleGoToLiveExcel}
+            className="w-52 py-3.5 px-6 rounded-xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-[#15803D] font-medium text-base border-2 border-[#16A34A] shadow-sm transition flex items-center justify-center gap-2"
           >
-            Go to Excel DB
+            <span>Go to Excel DB</span>
+            <ExternalLink className="w-4 h-4 text-[#16A34A]" />
           </button>
 
-          {/* Export to Excel (Solid Deep Blue) */}
+          {/* Export to Excel CTA (Acts as Save to Database Action) */}
           <button
-            onClick={onExportToExcel}
+            onClick={onSaveToDatabase}
             className="w-56 py-3.5 px-6 rounded-xl bg-[#00529B] hover:bg-[#00407A] active:scale-[0.98] text-white font-medium text-base shadow-md flex items-center justify-center gap-2.5 transition"
+            title="Save verified candidates to the database"
           >
             <span>Export to Excel</span>
-            <ArrowRightCircle className="w-5 h-5 text-white" />
+            <Save className="w-4 h-4 text-white" />
+          </button>
+        </div>
+
+        {/* Secondary Download Local Backup Option */}
+        <div className="sm:absolute sm:right-4 flex items-center gap-3 text-xs">
+          <button
+            onClick={onDownloadLocalBackup}
+            className="text-gray-500 hover:text-gray-800 flex items-center gap-1 hover:underline"
+            title="Download offline .xlsx copy"
+          >
+            <Download className="w-3.5 h-3.5" /> Download .xlsx backup
           </button>
         </div>
       </div>

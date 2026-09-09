@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useRef } from "react";
-import { Plus, X, FileText, ArrowRight, Loader2, ArrowRightCircle } from "lucide-react";
+import React, { useRef, useState, useEffect } from "react";
+import { Plus, X, FileText, Loader2, ArrowRightCircle, Eye, Maximize2 } from "lucide-react";
 import { UploadedFileItem } from "@/lib/types";
+import { generateFileThumbnail } from "@/lib/thumbnailGenerator";
 
 interface Screen02StagingProps {
   files: UploadedFileItem[];
@@ -22,6 +23,23 @@ export default function Screen02Staging({
   onBackToUpload,
 }: Screen02StagingProps) {
   const addFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [thumbnails, setThumbnails] = useState<{ [id: string]: string }>({});
+  const [previewFile, setPreviewFile] = useState<UploadedFileItem | null>(null);
+
+  // Generate real thumbnails for uploaded files
+  useEffect(() => {
+    files.forEach(async (item) => {
+      if (!thumbnails[item.id]) {
+        try {
+          const thumbUrl = await generateFileThumbnail(item.file);
+          setThumbnails((prev) => ({ ...prev, [item.id]: thumbUrl }));
+        } catch (e) {
+          console.warn("Thumbnail generation failed for", item.name);
+        }
+      }
+    });
+  }, [files, thumbnails]);
 
   const handleAddMoreClick = () => {
     addFileInputRef.current?.click();
@@ -33,8 +51,47 @@ export default function Screen02Staging({
     }
   };
 
+  // Drag and drop handlers on Screen 02
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const filesArr = Array.from(e.dataTransfer.files).filter((f) =>
+        f.name.match(/\.(pdf|docx|doc)$/i)
+      );
+      if (filesArr.length > 0) {
+        onAddFiles(filesArr);
+      }
+    }
+  };
+
+  const handleRemove = (id: string) => {
+    if (files.length <= 1) {
+      onBackToUpload();
+    } else {
+      onRemoveFile(id);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#F5F6FB] flex flex-col md:flex-row relative">
+    <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`min-h-screen bg-[#F5F6FB] flex flex-col md:flex-row relative transition-all ${
+        isDragging ? "bg-blue-50/80 border-4 border-dashed border-appBlue" : ""
+      }`}
+    >
       {/* Hidden file input for adding more files */}
       <input
         ref={addFileInputRef}
@@ -54,60 +111,52 @@ export default function Screen02Staging({
           >
             ← Upload different files
           </button>
-          <div className="text-xs text-gray-400">
-            {files.length} {files.length === 1 ? "document" : "documents"} ready for extraction
+          <div className="text-xs text-gray-500 font-medium">
+            {files.length} {files.length === 1 ? "document" : "documents"} queued for extraction
           </div>
         </div>
+
+        {/* Drag Over Banner */}
+        {isDragging && (
+          <div className="mb-6 p-4 bg-blue-100/70 border-2 border-dashed border-blue-400 rounded-xl text-center text-sm font-medium text-blue-800 animate-pulse">
+            Drop resumes here to add them to the extraction queue!
+          </div>
+        )}
 
         {/* Preview Cards Grid Matching Screen 02 */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {files.map((item) => (
             <div
               key={item.id}
-              className="group bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center hover:shadow-md transition relative"
+              onClick={() => setPreviewFile(item)}
+              className="group bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center hover:shadow-md transition relative cursor-pointer"
+              title="Click to preview document"
             >
-              {/* Document Thumbnail Simulation */}
-              <div className="w-full aspect-[3/4] bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between overflow-hidden relative shadow-inner">
-                {/* Header bar mimic */}
-                <div className="w-full">
-                  <div className="flex justify-between items-center mb-3">
-                    <div className="h-2.5 w-12 bg-gray-400 rounded-sm" />
-                    <div className="h-2 w-8 bg-gray-200 rounded-sm" />
+              {/* Document Thumbnail with Real Preview Image */}
+              <div className="w-full aspect-[3/4] bg-gray-50 border border-gray-200 rounded-lg overflow-hidden relative shadow-inner flex items-center justify-center">
+                {thumbnails[item.id] ? (
+                  <img
+                    src={thumbnails[item.id]}
+                    alt={item.name}
+                    className="w-full h-full object-cover object-top"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-4 text-gray-400">
+                    <Loader2 className="w-6 h-6 animate-spin text-appBlue mb-2" />
+                    <span className="text-[10px]">Generating preview...</span>
                   </div>
-                  <div className="h-5 w-full bg-gray-600 rounded-sm mb-3" />
-                  <div className="space-y-1.5">
-                    <div className="h-1.5 w-full bg-gray-200 rounded-full" />
-                    <div className="h-1.5 w-5/6 bg-gray-200 rounded-full" />
-                    <div className="h-1.5 w-4/6 bg-gray-200 rounded-full" />
-                  </div>
-                </div>
+                )}
 
-                {/* Table/Experience area mimic */}
-                <div className="w-full space-y-1.5 pt-2 border-t border-gray-100">
-                  <div className="flex gap-2">
-                    <div className="h-2 w-1/3 bg-gray-300 rounded-sm" />
-                    <div className="h-2 w-2/3 bg-gray-200 rounded-sm" />
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="h-2 w-1/3 bg-gray-300 rounded-sm" />
-                    <div className="h-2 w-2/3 bg-gray-200 rounded-sm" />
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="h-2 w-1/3 bg-gray-300 rounded-sm" />
-                    <div className="h-2 w-2/3 bg-gray-200 rounded-sm" />
-                  </div>
-                </div>
-
-                {/* Bottom line mimic */}
-                <div className="flex justify-between items-center pt-2">
-                  <div className="h-1.5 w-14 bg-gray-200 rounded-sm" />
-                  <div className="h-1.5 w-10 bg-gray-300 rounded-sm" />
+                {/* Hover Quick Preview Overlay */}
+                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 text-white text-xs font-medium backdrop-blur-[1px]">
+                  <Eye className="w-4 h-4" />
+                  <span>Preview</span>
                 </div>
               </div>
 
               {/* Filename underneath */}
               <span
-                className="mt-3 text-xs font-normal text-gray-700 truncate max-w-full text-center"
+                className="mt-3 text-xs font-medium text-gray-700 truncate max-w-full text-center"
                 title={item.name}
               >
                 {item.name}
@@ -118,7 +167,7 @@ export default function Screen02Staging({
       </main>
 
       {/* Right Sidebar Matching Screen 02 */}
-      <aside className="w-full md:w-80 lg:w-96 bg-white/70 md:bg-transparent p-6 flex flex-col justify-between border-t md:border-t-0 md:border-l border-gray-200 relative">
+      <aside className="w-full md:w-80 lg:w-96 bg-white/80 md:bg-transparent p-6 flex flex-col justify-between border-t md:border-t-0 md:border-l border-gray-200 relative">
         {/* Floating Add Button with Badge */}
         <div className="relative mb-6 flex justify-start items-center">
           <div className="relative">
@@ -135,6 +184,9 @@ export default function Screen02Staging({
               <Plus className="w-6 h-6 stroke-[2.5]" />
             </button>
           </div>
+          <span className="ml-4 text-xs text-gray-400 hidden sm:inline">
+            Drag & drop more files anytime
+          </span>
         </div>
 
         {/* Uploaded File Cards List */}
@@ -160,7 +212,7 @@ export default function Screen02Staging({
 
               {/* Remove Button */}
               <button
-                onClick={() => onRemoveFile(item.id)}
+                onClick={() => handleRemove(item.id)}
                 className="text-white/80 hover:text-white hover:bg-white/15 p-1 rounded-full transition flex-shrink-0"
                 title="Remove file"
               >
@@ -168,12 +220,6 @@ export default function Screen02Staging({
               </button>
             </div>
           ))}
-
-          {files.length === 0 && (
-            <div className="text-center py-10 text-gray-400 text-xs">
-              All files removed. Please add files to proceed.
-            </div>
-          )}
         </div>
 
         {/* Bottom CTA Action Button Matching Screen 02 */}
@@ -186,7 +232,7 @@ export default function Screen02Staging({
             {isExtracting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Extracting Data...</span>
+                <span>Extracting {files.length} Resumes...</span>
               </>
             ) : (
               <>
@@ -197,6 +243,40 @@ export default function Screen02Staging({
           </button>
         </div>
       </aside>
+
+      {/* Document Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <FileText className="w-4 h-4 text-appBlue flex-shrink-0" />
+                <h4 className="text-sm font-semibold text-gray-900 truncate">
+                  {previewFile.name}
+                </h4>
+              </div>
+              <button
+                onClick={() => setPreviewFile(null)}
+                className="p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 flex items-center justify-center bg-gray-100">
+              {thumbnails[previewFile.id] ? (
+                <img
+                  src={thumbnails[previewFile.id]}
+                  alt={previewFile.name}
+                  className="max-w-full max-h-[70vh] object-contain shadow-lg rounded-lg border border-gray-200"
+                />
+              ) : (
+                <div className="text-gray-400 text-xs">Preview loading...</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
