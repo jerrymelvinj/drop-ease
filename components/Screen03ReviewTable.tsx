@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ArrowLeft, Save, Check, ExternalLink, Download } from "lucide-react";
+import { ArrowLeft, Save, Check, ExternalLink, Download, RefreshCw } from "lucide-react";
 import { CandidateRecord } from "@/lib/types";
 import { LIVE_EXCEL_DB_URL } from "./Screen01Upload";
 
@@ -12,7 +12,10 @@ interface Screen03ReviewTableProps {
   onOpenExcelDb: () => void;
   onSaveToDatabase: () => void;
   onDownloadLocalBackup: () => void;
+  onOpenCloudSync: () => void;
+  hasCloudWebhook: boolean;
   exportSuccessMessage: string | null;
+  isSaving?: boolean;
 }
 
 export default function Screen03ReviewTable({
@@ -22,7 +25,10 @@ export default function Screen03ReviewTable({
   onOpenExcelDb,
   onSaveToDatabase,
   onDownloadLocalBackup,
+  onOpenCloudSync,
+  hasCloudWebhook,
   exportSuccessMessage,
+  isSaving = false,
 }: Screen03ReviewTableProps) {
   const [activeCell, setActiveCell] = useState<{ row: number; col: string } | null>(null);
 
@@ -46,15 +52,26 @@ export default function Screen03ReviewTable({
   return (
     <div className="min-h-screen bg-[#F5F6FB] flex flex-col justify-between p-4 sm:p-8 lg:p-12">
       {/* Top Header */}
-      <div className="w-full max-w-7xl mx-auto flex flex-col items-center mb-6">
+      <div className="w-full max-w-7xl mx-auto flex flex-col items-center mb-6 relative">
+        <div className="sm:absolute sm:right-0 sm:top-0 mb-3 sm:mb-0">
+          <button
+            onClick={onOpenCloudSync}
+            className="px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-sm"
+            title="Configure Live SharePoint/Cloud Sync"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Live SharePoint: TEST.xlsx</span>
+          </button>
+        </div>
+
         <h1 className="text-2xl sm:text-3xl font-bold text-[#1F2937] tracking-tight mb-2 text-center">
           PDFs have been merged!
         </h1>
         <p className="text-xs sm:text-sm text-gray-500 text-center max-w-2xl">
-          Review and edit the extracted candidate information. Click any cell to make manual corrections before saving.
+          Review and edit the extracted candidate information. Clicking &quot;Export to Excel&quot; will automatically sync verified candidates to your live SharePoint file, segregated by job role.
         </p>
 
-        {/* Success Alert Banner */}
+        {/* Success / Status Alert Banner */}
         {exportSuccessMessage && (
           <div className="mt-4 px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-medium flex items-center gap-2 shadow-sm animate-in fade-in">
             <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
@@ -162,14 +179,24 @@ export default function Screen03ReviewTable({
             <ExternalLink className="w-4 h-4 text-[#16A34A]" />
           </button>
 
-          {/* Export to Excel CTA (Acts as Save to Database Action) */}
+          {/* Export to Excel CTA (Acts as Save to Database Action & Syncs to SharePoint) */}
           <button
             onClick={onSaveToDatabase}
-            className="w-56 py-3.5 px-6 rounded-xl bg-[#00529B] hover:bg-[#00407A] active:scale-[0.98] text-white font-medium text-base shadow-md flex items-center justify-center gap-2.5 transition"
-            title="Save verified candidates to the database"
+            disabled={isSaving}
+            className="w-56 py-3.5 px-6 rounded-xl bg-[#00529B] hover:bg-[#00407A] active:scale-[0.98] text-white font-medium text-base shadow-md flex items-center justify-center gap-2.5 transition disabled:opacity-75 disabled:cursor-not-allowed"
+            title="Save and push candidates to live SharePoint Excel (TEST.xlsx)"
           >
-            <span>Export to Excel</span>
-            <Save className="w-4 h-4 text-white" />
+            {isSaving ? (
+              <>
+                <RefreshCw className="w-4 h-4 text-white animate-spin" />
+                <span>Syncing to Excel...</span>
+              </>
+            ) : (
+              <>
+                <span>Export to Excel</span>
+                <Save className="w-4 h-4 text-white" />
+              </>
+            )}
           </button>
         </div>
 

@@ -6,6 +6,7 @@ import Screen02Staging from "@/components/Screen02Staging";
 import Screen03ReviewTable from "@/components/Screen03ReviewTable";
 import ExcelDbModal from "@/components/ExcelDbModal";
 import ApiKeyModal from "@/components/ApiKeyModal";
+import CloudSyncModal from "@/components/CloudSyncModal";
 import { CandidateRecord, UploadedFileItem } from "@/lib/types";
 import {
   mergeCandidatesDeduplicated,
@@ -14,6 +15,7 @@ import {
 
 const DB_STORAGE_KEY = "hr_candidates_db_records";
 const API_KEY_STORAGE = "gemini_api_key_stored";
+const WEBHOOK_STORAGE = "excel_cloud_webhook_url";
 
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<"upload" | "staging" | "review">("upload");
@@ -21,12 +23,15 @@ export default function Home() {
   const [records, setRecords] = useState<CandidateRecord[]>([]);
   const [database, setDatabase] = useState<CandidateRecord[]>([]);
   const [apiKey, setApiKey] = useState("");
+  const [cloudWebhookUrl, setCloudWebhookUrl] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
   const [isExcelDbOpen, setIsExcelDbOpen] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
   const [exportSuccessMessage, setExportSuccessMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Load stored DB and API key on mount
+  // Load stored DB, API key, and Webhook on mount
   useEffect(() => {
     try {
       const storedDb = localStorage.getItem(DB_STORAGE_KEY);
@@ -67,6 +72,9 @@ export default function Home() {
 
       const storedKey = localStorage.getItem(API_KEY_STORAGE);
       if (storedKey) setApiKey(storedKey);
+
+      const storedWebhook = localStorage.getItem(WEBHOOK_STORAGE);
+      if (storedWebhook) setCloudWebhookUrl(storedWebhook);
     } catch (e) {
       console.warn("Could not access localStorage", e);
     }
@@ -76,6 +84,15 @@ export default function Home() {
     setApiKey(key);
     try {
       localStorage.setItem(API_KEY_STORAGE, key);
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const saveWebhookUrl = (url: string) => {
+    setCloudWebhookUrl(url);
+    try {
+      localStorage.setItem(WEBHOOK_STORAGE, url);
     } catch (e) {
       console.warn(e);
     }
@@ -155,7 +172,7 @@ export default function Home() {
     });
   };
 
-  // Screen 02 -> Trigger Data Extraction (Chunked into batches to safely support 10+ entries)
+  // Screen 02 -> Trigger Data Extraction (Chunked into batches of 4)
   const handleExtractData = async () => {
     if (files.length === 0) return;
     setIsExtracting(true);
@@ -221,17 +238,16 @@ export default function Home() {
     });
   };
 
-  // Screen 03 -> "Export to Excel" CTA: Acts as Save to Database Action (NO automatic file download)
-  const handleSaveToDatabase = () => {
+  // Screen 03 -> "Export to Excel" CTA: Saves locally and directly syncs to live SharePoint Excel
+  const handleSaveToDatabase = async () => {
     if (records.length === 0) return;
+    setIsSaving(true);
 
-    // Deduplicate against existing DB
-    const { merged, addedCount, duplicateCount } = mergeCandidatesDeduplicated(
+    // 1. Deduplicate against existing local DB
+    const { merged } = mergeCandidatesDeduplicated(
       database,
       records
     );
-
-    // Save updated database
     setDatabase(merged);
     try {
       localStorage.setItem(DB_STORAGE_KEY, JSON.stringify(merged));
@@ -239,14 +255,48 @@ export default function Home() {
       console.warn("Could not save to localStorage", e);
     }
 
-    const message = `Saved to Database! ${addedCount} candidate record(s) added.${
-      duplicateCount > 0 ? ` (${duplicateCount} duplicate(s) omitted)` : ""
-    }`;
-    setExportSuccessMessage(message);
+    // 2. Direct Sync to live SharePoint Excel (TEST.xlsx)
+    try {
+      const res = await fetch("/api/sync-excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          records: records,
+          webhookUrl: cloudWebhookUrl || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.directSharepoint) {
+        const roleSheets = (data.sheets || [])
+          .filter((s: string) => s !== "All Candidates")
+          .join(", ");
+        const roleDetails = roleSheets ? ` (Role tabs: ${roleSheets})` : "";
+        setExportSuccessMessage(
+          `✅ Saved and synced ${data.addedRecords ?? records.length} candidate(s) to live SharePoint Excel (TEST.xlsx)!${roleDetails}`
+        );
+      } else if (data.success) {
+        setExportSuccessMessage(
+          `✅ Saved ${records.length} candidate(s) to database successfully!`
+        );
+      } else {
+        setExportSuccessMessage(
+          `⚠️ Saved to local database. (SharePoint note: ${data.error || "Sync pending"})`
+        );
+      }
+    } catch (err: any) {
+      console.warn("Cloud sync error:", err);
+      setExportSuccessMessage(
+        `Saved to local database. (Network sync note: ${err.message})`
+      );
+    } finally {
+      setIsSaving(false);
+    }
 
     setTimeout(() => {
       setExportSuccessMessage(null);
-    }, 6000);
+    }, 8000);
   };
 
   // Secondary option: Download offline .xlsx file
@@ -311,7 +361,10 @@ export default function Home() {
           onOpenExcelDb={() => setIsExcelDbOpen(true)}
           onSaveToDatabase={handleSaveToDatabase}
           onDownloadLocalBackup={handleDownloadLocalBackup}
+          onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+          hasCloudWebhook={Boolean(cloudWebhookUrl)}
           exportSuccessMessage={exportSuccessMessage}
+          isSaving={isSaving}
         />
       )}
 
@@ -329,6 +382,13 @@ export default function Home() {
         onClose={() => setIsApiKeyModalOpen(false)}
         apiKey={apiKey}
         onSaveApiKey={saveApiKey}
+      />
+
+      <CloudSyncModal
+        isOpen={isCloudSyncModalOpen}
+        onClose={() => setIsCloudSyncModalOpen(false)}
+        webhookUrl={cloudWebhookUrl}
+        onSaveWebhookUrl={saveWebhookUrl}
       />
     </>
   );

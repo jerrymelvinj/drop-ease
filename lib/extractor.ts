@@ -67,7 +67,7 @@ export function parseResumeWithHeuristics(rawText: string): ParsedCandidateData 
 
   // 4. Role heuristic (Extracts applied role or latest/current job title)
   let roleAppliedFor = "";
-  // Check lines near top (candidate headline / objective)
+  // Priority 1: Check lines near top (candidate headline / objective / target role)
   for (const line of lines.slice(0, 8)) {
     for (const pattern of COMMON_ROLE_PATTERNS) {
       const match = line.match(pattern);
@@ -79,7 +79,24 @@ export function parseResumeWithHeuristics(rawText: string): ParsedCandidateData 
     if (roleAppliedFor) break;
   }
 
-  // If not found in top lines, search throughout work experience sections
+  // Priority 2: Check work experience / employment section for the latest (first listed) designation
+  if (!roleAppliedFor) {
+    const expSectionMatch = rawText.match(
+      /(?:Work\s+Experience|Experience|Employment\s+History|Professional\s+Experience)[:\s]+([\s\S]{1,1200})/i
+    );
+    if (expSectionMatch) {
+      const expSnippet = expSectionMatch[1];
+      for (const pattern of COMMON_ROLE_PATTERNS) {
+        const match = expSnippet.match(pattern);
+        if (match) {
+          roleAppliedFor = match[0].trim();
+          break;
+        }
+      }
+    }
+  }
+
+  // Priority 3: Search throughout rawText
   if (!roleAppliedFor) {
     for (const pattern of COMMON_ROLE_PATTERNS) {
       const match = rawText.match(pattern);
@@ -123,9 +140,10 @@ export async function parseResumeWithGemini(
 ): Promise<ParsedCandidateData> {
   const prompt = `You are an expert HR recruitment assistant. Extract structured candidate information from the following resume text.
 CRITICAL INSTRUCTIONS FOR "roleAppliedFor":
-- Extract the candidate's current or most recent job title / professional role (e.g. 'Senior Full Stack Engineer', 'Lead Data Scientist', 'Full Stack Developer', 'DevOps Specialist', 'Product Manager').
-- If a target role is specifically mentioned in their header or summary, use that.
-- Otherwise, extract their latest or current designation from their work experience history.
+- Extract the candidate's current or most recent job title / professional role (e.g. 'Senior Full Stack Engineer', 'Lead Data Scientist', 'Full Stack Developer', 'DevOps Specialist', 'Product Manager', 'Cloud Architect').
+- In resumes, the most recent job is typically listed first under "Experience" or "Work History", or stated in their headline/summary.
+- Extract this exact latest role held by the candidate so the system can segregate the candidate into that role's sheet in Excel.
+- Clean and normalize the title (e.g. "Lead Data Scientist", "Senior Full Stack Engineer").
 
 If a field is not explicitly mentioned or cannot be inferred, return an empty string "".
 
@@ -139,7 +157,7 @@ Provide your answer ONLY in valid JSON matching this exact structure:
   "candidateName": "Full candidate name",
   "email": "candidate email address",
   "contactNumber": "phone number",
-  "roleAppliedFor": "current, most recent, or target designation / primary job role",
+  "roleAppliedFor": "current or most recent designation / primary job role",
   "yearsOfExperience": "number of years or range, e.g. '5' or '7+'",
   "currentCtc": "current salary if stated or ''",
   "expectedCtc": "expected salary if stated or ''",

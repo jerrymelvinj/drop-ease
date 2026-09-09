@@ -11,6 +11,10 @@ import {
   mergeCandidatesDeduplicated,
   isExactDuplicate,
 } from "./lib/excelExport";
+import {
+  testSharePointConnection,
+  syncCandidatesToSharePoint,
+} from "./lib/sharepointSync";
 import { CandidateRecord } from "./lib/types";
 
 async function runTestSuite() {
@@ -167,6 +171,19 @@ async function runTestSuite() {
   XLSX.writeFile(wb, testExcelPath);
   assert(fs.existsSync(testExcelPath) && fs.statSync(testExcelPath).size > 1000, "Generated .xlsx workbook written and validated");
   fs.unlinkSync(testExcelPath); // Cleanup
+
+  // 6. Live SharePoint Direct Sync Engine
+  console.log("\n--- TEST GROUP 6: Live SharePoint Direct Sync Engine ---");
+  const connInfo = await testSharePointConnection();
+  assert(connInfo.connected === true, "Live SharePoint connection verified (connected: true)");
+  assert(connInfo.fileName === "TEST.xlsx", "Target SharePoint file identified: 'TEST.xlsx'");
+  assert(connInfo.sheets.includes("All Candidates"), "SharePoint file contains 'All Candidates' sheet");
+  assert(connInfo.sheets.length >= 2, `SharePoint file contains ${connInfo.sheets.length} segregated role sheets`);
+
+  const syncRes = await syncCandidatesToSharePoint(undefined, candidatesForExcel);
+  assert(syncRes.success === true, "Direct SaveBinaryStream to SharePoint returned success: true");
+  assert(syncRes.totalRecords >= 4, `Total records merged in SharePoint TEST.xlsx: ${syncRes.totalRecords}`);
+  assert(syncRes.sheets.length >= 4, `SharePoint worksheets updated: [${syncRes.sheets.join(", ")}]`);
 
   console.log("\n=================================================");
   console.log(`   ALL TESTS PASSED! (${passedTests}/${totalTests} checks verified)`);
