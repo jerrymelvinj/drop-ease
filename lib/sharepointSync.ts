@@ -181,9 +181,22 @@ export async function syncCandidatesToSharePoint(
             const candidateName = r["Candidate Name"] || "";
             const email = r["Email Address"] || r["Email ID"] || "";
 
-            if (candidateName || email) {
+            const isDummySeed = (name: string, em: string) => {
+              const n = name.toLowerCase().trim();
+              const e = em.toLowerCase().trim();
+              return (
+                n.includes("jerry melvin") ||
+                e.includes("jerry.m@eko.in") ||
+                (n === "sarah connor" && e.includes("cyberdyne.org")) ||
+                (n === "alice wong" && e.includes("ai.org")) ||
+                (n === "bob taylor" && e.includes("fullstack.io")) ||
+                (n.includes("alex smith") && (e.includes("domain.org") || e.includes("alex.smith.ai")))
+              );
+            };
+
+            if ((candidateName || email) && !isDummySeed(candidateName, email)) {
               existingRecords.push({
-                sNo: Number(r["S.No"]) || existingRecords.length + 1,
+                sNo: existingRecords.length + 1,
                 candidateName,
                 email,
                 contactNumber: r["Contact Number"] || "",

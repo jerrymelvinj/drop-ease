@@ -219,7 +219,10 @@ Provide your answer ONLY in valid JSON matching this exact structure:
   "notes": "brief summary of top skills, degrees, or notable achievements"
 }`;
 
-  const models = ["gemini-3.6-flash", "gemini-flash-latest"];
+  const models = [
+    "gemini-3.6-flash",
+    "gemini-flash-latest",
+  ];
   let lastError: any = null;
 
   for (const model of models) {
@@ -228,6 +231,7 @@ Provide your answer ONLY in valid JSON matching this exact structure:
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(6000),
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {

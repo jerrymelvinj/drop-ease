@@ -36,46 +36,27 @@ export default function Home() {
     try {
       const storedDb = localStorage.getItem(DB_STORAGE_KEY);
       if (storedDb) {
-        setDatabase(JSON.parse(storedDb));
+        const parsed = JSON.parse(storedDb);
+        const filtered = Array.isArray(parsed)
+          ? parsed
+              .filter((c: CandidateRecord) => {
+                const name = (c.candidateName || "").toLowerCase().trim();
+                const email = (c.email || "").toLowerCase().trim();
+                return (
+                  !name.includes("jerry melvin") &&
+                  !email.includes("jerry.m@eko.in") &&
+                  !(name === "sarah connor" && email.includes("cyberdyne.org")) &&
+                  !(name === "alice wong" && email.includes("ai.org")) &&
+                  !(name === "bob taylor" && email.includes("fullstack.io")) &&
+                  !(name.includes("alex smith") && (email.includes("domain.org") || email.includes("alex.smith.ai")))
+                );
+              })
+              .map((c, idx) => ({ ...c, sNo: idx + 1 }))
+          : [];
+        setDatabase(filtered);
+        localStorage.setItem(DB_STORAGE_KEY, JSON.stringify(filtered));
       } else {
-        const initialSeed: CandidateRecord[] = [
-          {
-            sNo: 1,
-            candidateName: "Jerry Melvin",
-            email: "jerry.m@eko.in",
-            contactNumber: "12345 12345",
-            roleAppliedFor: "Full Stack Developer",
-            yearsOfExperience: "7",
-            currentCtc: "12 LPA",
-            expectedCtc: "20 LPA",
-            noticePeriod: "30 Days",
-            notes: "Strong UI understanding & TypeScript",
-            reasonForLeaving: "Seeking leadership growth",
-            interviewSchedule: "15/09/2026, 11:00 AM",
-            status: "Under Review",
-            offerStatus: "Pending",
-            addedTimestamp: "2026-09-08 18:04:22",
-          },
-          {
-            sNo: 2,
-            candidateName: "Alex Smith",
-            email: "alex.smith.ai@domain.org",
-            contactNumber: "987-654-3210",
-            roleAppliedFor: "Lead Data Scientist",
-            yearsOfExperience: "6+",
-            currentCtc: "$140,000",
-            expectedCtc: "$175,000",
-            noticePeriod: "Immediate",
-            notes: "Columbia M.S., PyTorch, ML Pipelines",
-            reasonForLeaving: "Relocation",
-            interviewSchedule: "16/09/2026, 02:30 PM",
-            status: "Selected",
-            offerStatus: "Pending",
-            addedTimestamp: "2026-09-08 18:04:22",
-          },
-        ];
-        setDatabase(initialSeed);
-        localStorage.setItem(DB_STORAGE_KEY, JSON.stringify(initialSeed));
+        setDatabase([]);
       }
 
       const storedKey = localStorage.getItem(API_KEY_STORAGE);
