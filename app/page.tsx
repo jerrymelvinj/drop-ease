@@ -50,6 +50,10 @@ export default function Home() {
             expectedCtc: "20 LPA",
             noticePeriod: "30 Days",
             notes: "Strong UI understanding & TypeScript",
+            reasonForLeaving: "Seeking leadership growth",
+            interviewSchedule: "15/09/2026, 11:00 AM",
+            status: "Under Review",
+            offerStatus: "Pending",
             addedTimestamp: "2026-09-08 18:04:22",
           },
           {
@@ -63,6 +67,10 @@ export default function Home() {
             expectedCtc: "$175,000",
             noticePeriod: "Immediate",
             notes: "Columbia M.S., PyTorch, ML Pipelines",
+            reasonForLeaving: "Relocation",
+            interviewSchedule: "16/09/2026, 02:30 PM",
+            status: "Selected",
+            offerStatus: "Pending",
             addedTimestamp: "2026-09-08 18:04:22",
           },
         ];

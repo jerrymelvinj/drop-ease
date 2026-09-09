@@ -64,6 +64,10 @@ export async function POST(req: NextRequest) {
           expectedCtc: parsed.expectedCtc || "",
           noticePeriod: parsed.noticePeriod || "",
           notes: parsed.notes || "",
+          reasonForLeaving: parsed.reasonForLeaving || "",
+          interviewSchedule: parsed.interviewSchedule || "",
+          status: parsed.status || "Under Review",
+          offerStatus: parsed.offerStatus || "Pending",
           addedTimestamp: getFormattedTimestamp(),
           fileName: file.name,
         });
@@ -81,6 +85,10 @@ export async function POST(req: NextRequest) {
           expectedCtc: "",
           noticePeriod: "",
           notes: `Extracted with manual review required: ${fileErr.message}`,
+          reasonForLeaving: "",
+          interviewSchedule: "",
+          status: "Under Review",
+          offerStatus: "Pending",
           addedTimestamp: getFormattedTimestamp(),
           fileName: file.name,
         });

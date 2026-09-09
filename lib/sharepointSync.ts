@@ -179,7 +179,7 @@ export async function syncCandidatesToSharePoint(
             });
 
             const candidateName = r["Candidate Name"] || "";
-            const email = r["Email ID"] || "";
+            const email = r["Email Address"] || r["Email ID"] || "";
 
             if (candidateName || email) {
               existingRecords.push({
@@ -187,13 +187,17 @@ export async function syncCandidatesToSharePoint(
                 candidateName,
                 email,
                 contactNumber: r["Contact Number"] || "",
-                roleAppliedFor: r["Role Applied For"] || "",
-                yearsOfExperience: r["Years of Experience"] || "",
+                roleAppliedFor: r["Current / Latest Role"] || r["Role Applied For"] || "",
+                yearsOfExperience: r["Experience (Years)"] || r["Years of Experience"] || "",
                 currentCtc: r["Current CTC"] || "",
                 expectedCtc: r["Expected CTC"] || "",
                 noticePeriod: r["Notice Period"] || "",
-                notes: r["Notes"] || "",
-                addedTimestamp: r["Added Timestamp"] || "",
+                notes: r["Key Skills & Highlights"] || r["Notes"] || "",
+                reasonForLeaving: r["Reason for Leaving"] || "",
+                interviewSchedule: r["Interview Schedule"] || "",
+                status: r["Status"] || "Under Review",
+                offerStatus: r["Offer Status"] || "Pending",
+                addedTimestamp: r["Added On"] || r["Added Timestamp"] || "",
               });
             }
           }

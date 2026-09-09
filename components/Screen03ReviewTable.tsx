@@ -45,6 +45,8 @@ export default function Screen03ReviewTable({
     width: string;
     placeholder: string;
     tooltip?: string;
+    type?: "text" | "select" | "timestamp";
+    options?: { label: string; value: string; colorClass: string }[];
   }[] = [
     { key: "candidateName", label: "Candidate Name", width: "min-w-[150px]", placeholder: "Name" },
     { key: "email", label: "Email Address", width: "min-w-[175px]", placeholder: "email@domain.com" },
@@ -61,7 +63,33 @@ export default function Screen03ReviewTable({
     { key: "expectedCtc", label: "Expected CTC", width: "min-w-[120px]", placeholder: "Expected CTC" },
     { key: "noticePeriod", label: "Notice Period", width: "min-w-[120px]", placeholder: "Notice Period" },
     { key: "notes", label: "Key Skills & Highlights", width: "min-w-[200px]", placeholder: "Highlights" },
-    { key: "addedTimestamp", label: "Added On", width: "min-w-[140px]", placeholder: "" },
+    { key: "reasonForLeaving", label: "Reason for Leaving", width: "min-w-[160px]", placeholder: "Enter reason" },
+    { key: "interviewSchedule", label: "Interview Schedule", width: "min-w-[190px]", placeholder: "DD/MM/YYYY, HH:MM AM/PM" },
+    {
+      key: "status",
+      label: "Status",
+      width: "min-w-[145px]",
+      placeholder: "Status",
+      type: "select",
+      options: [
+        { label: "Under Review", value: "Under Review", colorClass: "bg-gray-100 text-gray-700 border-gray-300" },
+        { label: "Selected", value: "Selected", colorClass: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+        { label: "Rejected", value: "Rejected", colorClass: "bg-rose-100 text-rose-800 border-rose-300" },
+      ],
+    },
+    {
+      key: "offerStatus",
+      label: "Offer Status",
+      width: "min-w-[145px]",
+      placeholder: "Offer Status",
+      type: "select",
+      options: [
+        { label: "Pending", value: "Pending", colorClass: "bg-gray-100 text-gray-700 border-gray-300" },
+        { label: "Accepted", value: "Accepted", colorClass: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+        { label: "Rejected", value: "Rejected", colorClass: "bg-rose-100 text-rose-800 border-rose-300" },
+      ],
+    },
+    { key: "addedTimestamp", label: "Added On", width: "min-w-[140px]", placeholder: "", type: "timestamp" },
   ];
 
   const handleGoToLiveExcel = () => {
@@ -192,36 +220,68 @@ export default function Screen03ReviewTable({
                 {columns.map((col) => {
                   const val = String(rec[col.key] || "");
                   const isTimestamp = col.key === "addedTimestamp";
+                  const isSelect = col.type === "select";
+
+                  if (isTimestamp) {
+                    return (
+                      <td key={col.key} className="p-1 border-r border-blue-100 last:border-r-0">
+                        <div className="px-2.5 py-1.5 text-gray-500 font-mono text-[11px] truncate">
+                          {val}
+                        </div>
+                      </td>
+                    );
+                  }
+
+                  if (isSelect) {
+                    const fallbackVal = col.key === "status" ? "Under Review" : "Pending";
+                    const currentVal = val || fallbackVal;
+                    let badgeClass = "bg-gray-100 text-gray-700 border-gray-300";
+                    if (currentVal === "Selected" || currentVal === "Accepted") {
+                      badgeClass = "bg-emerald-100 text-emerald-800 border-emerald-300 font-medium";
+                    } else if (currentVal === "Rejected") {
+                      badgeClass = "bg-rose-100 text-rose-800 border-rose-300 font-medium";
+                    }
+
+                    return (
+                      <td key={col.key} className="p-1 border-r border-blue-100 last:border-r-0">
+                        <select
+                          value={currentVal}
+                          onChange={(e) => onUpdateRecord(rowIndex, col.key, e.target.value)}
+                          className={`w-full px-2 py-1 rounded-md text-xs border transition cursor-pointer font-medium focus:outline-hidden focus:ring-2 focus:ring-appBlue/40 ${badgeClass}`}
+                        >
+                          {col.options?.map((opt) => (
+                            <option key={opt.value} value={opt.value} className="bg-white text-gray-800 font-normal">
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    );
+                  }
 
                   return (
                     <td
                       key={col.key}
                       className="p-1 border-r border-blue-100 last:border-r-0"
                     >
-                      {isTimestamp ? (
-                        <div className="px-2.5 py-1.5 text-gray-500 font-mono text-[11px] truncate">
-                          {val}
-                        </div>
-                      ) : (
-                        <input
-                          type="text"
-                          value={val}
-                          placeholder={col.placeholder}
-                          onChange={(e) =>
-                            onUpdateRecord(rowIndex, col.key, e.target.value)
-                          }
-                          onFocus={() =>
-                            setActiveCell({ row: rowIndex, col: col.key })
-                          }
-                          onBlur={() => setActiveCell(null)}
-                          className={`w-full px-2.5 py-1.5 rounded bg-transparent border text-xs text-gray-800 transition ${
-                            activeCell?.row === rowIndex &&
-                            activeCell?.col === col.key
-                              ? "bg-white border-appBlue ring-2 ring-appBlue/30 font-medium"
-                              : "border-transparent hover:border-gray-300 focus:bg-white"
-                          }`}
-                        />
-                      )}
+                      <input
+                        type="text"
+                        value={val}
+                        placeholder={col.placeholder}
+                        onChange={(e) =>
+                          onUpdateRecord(rowIndex, col.key, e.target.value)
+                        }
+                        onFocus={() =>
+                          setActiveCell({ row: rowIndex, col: col.key })
+                        }
+                        onBlur={() => setActiveCell(null)}
+                        className={`w-full px-2.5 py-1.5 rounded bg-transparent border text-xs text-gray-800 transition ${
+                          activeCell?.row === rowIndex &&
+                          activeCell?.col === col.key
+                            ? "bg-white border-appBlue ring-2 ring-appBlue/30 font-medium"
+                            : "border-transparent hover:border-gray-300 focus:bg-white"
+                        }`}
+                      />
                     </td>
                   );
                 })}

@@ -5,15 +5,19 @@ import { CandidateRecord } from "./types";
 export const EXCEL_COLUMNS = [
   "S.No",
   "Candidate Name",
-  "Email ID",
+  "Email Address",
   "Contact Number",
-  "Role Applied For",
-  "Years of Experience",
+  "Current / Latest Role",
+  "Experience (Years)",
   "Current CTC",
   "Expected CTC",
   "Notice Period",
-  "Notes",
-  "Added Timestamp",
+  "Key Skills & Highlights",
+  "Reason for Leaving",
+  "Interview Schedule",
+  "Status",
+  "Offer Status",
+  "Added On",
 ];
 
 export const ROLE_COLORS: Record<string, string> = {
@@ -44,15 +48,19 @@ function recordToRowObject(rec: CandidateRecord, index: number) {
   return {
     "S.No": index + 1,
     "Candidate Name": rec.candidateName || "",
-    "Email ID": rec.email || "",
+    "Email Address": rec.email || "",
     "Contact Number": rec.contactNumber || "",
-    "Role Applied For": rec.roleAppliedFor || "General",
-    "Years of Experience": rec.yearsOfExperience || "",
+    "Current / Latest Role": rec.roleAppliedFor || "General",
+    "Experience (Years)": rec.yearsOfExperience || "",
     "Current CTC": rec.currentCtc || "",
     "Expected CTC": rec.expectedCtc || "",
     "Notice Period": rec.noticePeriod || "",
-    "Notes": rec.notes || "",
-    "Added Timestamp": rec.addedTimestamp || new Date().toISOString().replace("T", " ").slice(0, 19),
+    "Key Skills & Highlights": rec.notes || "",
+    "Reason for Leaving": rec.reasonForLeaving || "",
+    "Interview Schedule": rec.interviewSchedule || "",
+    "Status": rec.status || "Under Review",
+    "Offer Status": rec.offerStatus || "Pending",
+    "Added On": rec.addedTimestamp || new Date().toISOString().replace("T", " ").slice(0, 19),
   };
 }
 
@@ -141,15 +149,19 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
   const columnsDef = [
     { header: "S.No", key: "sNo", width: 8 },
     { header: "Candidate Name", key: "candidateName", width: 25 },
-    { header: "Email ID", key: "email", width: 32 },
+    { header: "Email Address", key: "email", width: 32 },
     { header: "Contact Number", key: "contactNumber", width: 20 },
-    { header: "Role Applied For", key: "roleAppliedFor", width: 26 },
-    { header: "Years of Experience", key: "yearsOfExperience", width: 20 },
+    { header: "Current / Latest Role", key: "roleAppliedFor", width: 26 },
+    { header: "Experience (Years)", key: "yearsOfExperience", width: 20 },
     { header: "Current CTC", key: "currentCtc", width: 16 },
     { header: "Expected CTC", key: "expectedCtc", width: 16 },
     { header: "Notice Period", key: "noticePeriod", width: 16 },
-    { header: "Notes", key: "notes", width: 42 },
-    { header: "Added Timestamp", key: "addedTimestamp", width: 22 },
+    { header: "Key Skills & Highlights", key: "notes", width: 38 },
+    { header: "Reason for Leaving", key: "reasonForLeaving", width: 24 },
+    { header: "Interview Schedule", key: "interviewSchedule", width: 24 },
+    { header: "Status", key: "status", width: 16 },
+    { header: "Offer Status", key: "offerStatus", width: 16 },
+    { header: "Added On", key: "addedTimestamp", width: 22 },
   ];
 
   function addWorksheetWithStyling(
@@ -180,7 +192,7 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
       cell.alignment = {
         vertical: "middle",
         horizontal:
-          colNumber === 1 || colNumber === 6 || colNumber === 9 || colNumber === 11
+          colNumber === 1 || colNumber === 6 || colNumber === 9 || colNumber === 13 || colNumber === 14 || colNumber === 15
             ? "center"
             : "left",
       };
@@ -205,6 +217,10 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
         expectedCtc: rec.expectedCtc || "",
         noticePeriod: rec.noticePeriod || "",
         notes: rec.notes || "",
+        reasonForLeaving: rec.reasonForLeaving || "",
+        interviewSchedule: rec.interviewSchedule || "",
+        status: rec.status || "Under Review",
+        offerStatus: rec.offerStatus || "Pending",
         addedTimestamp: rec.addedTimestamp || "",
       });
 
@@ -226,7 +242,7 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
         cell.alignment = {
           vertical: "middle",
           horizontal:
-            colNumber === 1 || colNumber === 6 || colNumber === 9 || colNumber === 11
+            colNumber === 1 || colNumber === 6 || colNumber === 9 || colNumber === 13 || colNumber === 14 || colNumber === 15
               ? "center"
               : "left",
         };
@@ -292,8 +308,12 @@ export function generateRoleSegregatedWorkbook(records: CandidateRecord[]): XLSX
     { wch: 16 }, // Current CTC
     { wch: 16 }, // Expected CTC
     { wch: 16 }, // Notice Period
-    { wch: 40 }, // Notes
-    { wch: 22 }, // Timestamp
+    { wch: 38 }, // Notes
+    { wch: 24 }, // Reason for Leaving
+    { wch: 24 }, // Interview Schedule
+    { wch: 16 }, // Status
+    { wch: 16 }, // Offer Status
+    { wch: 22 }, // Added On
   ];
   XLSX.utils.book_append_sheet(wb, masterSheet, "All Candidates");
   sheetNames.add("all candidates");
@@ -321,7 +341,11 @@ export function generateRoleSegregatedWorkbook(records: CandidateRecord[]): XLSX
       { wch: 16 },
       { wch: 16 },
       { wch: 16 },
-      { wch: 40 },
+      { wch: 38 },
+      { wch: 24 },
+      { wch: 24 },
+      { wch: 16 },
+      { wch: 16 },
       { wch: 22 },
     ];
     XLSX.utils.book_append_sheet(wb, roleSheet, sheetTitle);

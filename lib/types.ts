@@ -1,3 +1,6 @@
+export type CandidateStatus = "Under Review" | "Selected" | "Rejected";
+export type OfferStatus = "Pending" | "Accepted" | "Rejected";
+
 export interface CandidateRecord {
   sNo: number;
   candidateName: string;
@@ -9,6 +12,10 @@ export interface CandidateRecord {
   expectedCtc: string;
   noticePeriod: string;
   notes: string;
+  reasonForLeaving?: string;
+  interviewSchedule?: string;
+  status?: CandidateStatus | string;
+  offerStatus?: OfferStatus | string;
   addedTimestamp: string;
   fileName?: string;
 }

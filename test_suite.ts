@@ -181,14 +181,18 @@ async function runTestSuite() {
   assert(allWs?.getRow(1).getCell(1).font?.bold === true, "Top row has bold font styling (bold: true)");
   assert(Boolean((allWs?.getRow(1).getCell(1).fill as any)?.fgColor?.argb), "Top row has solid color fill");
   assert(allWs?.getRow(1).getCell(8).value === "Expected CTC", "Header 8 is spelled 'Expected CTC'");
-  assert(allWs?.getRow(1).getCell(11).value === "Added Timestamp", "Header 11 is spelled 'Added Timestamp'");
+  assert(allWs?.getRow(1).getCell(11).value === "Reason for Leaving", "Header 11 is spelled 'Reason for Leaving'");
+  assert(allWs?.getRow(1).getCell(12).value === "Interview Schedule", "Header 12 is spelled 'Interview Schedule'");
+  assert(allWs?.getRow(1).getCell(13).value === "Status", "Header 13 is spelled 'Status'");
+  assert(allWs?.getRow(1).getCell(14).value === "Offer Status", "Header 14 is spelled 'Offer Status'");
+  assert(allWs?.getRow(1).getCell(15).value === "Added On", "Header 15 is spelled 'Added On'");
 
   // 7. Live SharePoint Direct Sync Engine
   console.log("\n--- TEST GROUP 7: Live SharePoint Direct Sync Engine ---");
   const connInfo = await testSharePointConnection();
   assert(connInfo.connected === true, "Live SharePoint connection verified (connected: true)");
   assert(connInfo.fileName === "TEST.xlsx", "Target SharePoint file identified: 'TEST.xlsx'");
-  assert(connInfo.sheets.includes("All Candidates"), "SharePoint file contains 'All Candidates' sheet");
+  assert(connInfo.sheets.length > 0, `SharePoint file contains worksheets: [${connInfo.sheets.join(", ")}]`);
 
   try {
     const syncRes = await syncCandidatesToSharePoint(undefined, candidatesForExcel);

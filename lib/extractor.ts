@@ -11,6 +11,10 @@ export interface ParsedCandidateData {
   expectedCtc: string;
   noticePeriod: string;
   notes: string;
+  reasonForLeaving?: string;
+  interviewSchedule?: string;
+  status?: string;
+  offerStatus?: string;
 }
 
 export async function extractTextFromFileBuffer(
@@ -176,6 +180,10 @@ export function parseResumeWithHeuristics(rawText: string): ParsedCandidateData 
     expectedCtc: "",
     noticePeriod: "",
     notes,
+    reasonForLeaving: "",
+    interviewSchedule: "",
+    status: "Under Review",
+    offerStatus: "Pending",
   };
 }
 
@@ -248,6 +256,10 @@ Provide your answer ONLY in valid JSON matching this exact structure:
         expectedCtc: parsed.expectedCtc || "",
         noticePeriod: parsed.noticePeriod || "",
         notes: parsed.notes || "",
+        reasonForLeaving: "",
+        interviewSchedule: "",
+        status: "Under Review",
+        offerStatus: "Pending",
       };
     } catch (err: any) {
       lastError = err;
