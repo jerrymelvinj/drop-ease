@@ -104,22 +104,33 @@ export default function Screen02Staging({
 
       {/* Main Canvas (Document Previews) */}
       <main className="flex-1 p-8 sm:p-12 overflow-y-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+                Staging Queue
+              </h2>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                {files.length} {files.length === 1 ? "resume" : "resumes"} ready for extraction
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Drag more files anywhere onto this screen to add to the batch.
+            </p>
+          </div>
+
           <button
             onClick={onBackToUpload}
-            className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1.5 transition"
+            className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1.5 transition self-start sm:self-auto py-1 px-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 shadow-sm"
           >
-            ← Upload different files
+            ← Clear All & Return
           </button>
-          <div className="text-xs text-gray-500 font-medium">
-            {files.length} {files.length === 1 ? "document" : "documents"} queued for extraction
-          </div>
         </div>
 
         {/* Drag Over Banner */}
         {isDragging && (
           <div className="mb-6 p-4 bg-blue-100/70 border-2 border-dashed border-blue-400 rounded-xl text-center text-sm font-medium text-blue-800 animate-pulse">
-            Drop resumes here to add them to the extraction queue!
+            Drop resumes here to add to the staging batch!
           </div>
         )}
 
@@ -130,7 +141,7 @@ export default function Screen02Staging({
               key={item.id}
               onClick={() => setPreviewFile(item)}
               className="group bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center hover:shadow-md transition relative cursor-pointer"
-              title="Click to preview document"
+              title="Click card to preview document"
             >
               {/* Document Thumbnail with Real Preview Image */}
               <div className="w-full aspect-[3/4] bg-gray-50 border border-gray-200 rounded-lg overflow-hidden relative shadow-inner flex items-center justify-center">
@@ -147,11 +158,21 @@ export default function Screen02Staging({
                   </div>
                 )}
 
+                {/* Processing Overlay during extraction */}
+                {isExtracting && (
+                  <div className="absolute inset-0 bg-blue-950/70 backdrop-blur-xs flex flex-col items-center justify-center text-white text-xs gap-1.5 p-2 text-center animate-in fade-in">
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-300" />
+                    <span className="font-medium text-[11px]">Extracting profile...</span>
+                  </div>
+                )}
+
                 {/* Hover Quick Preview Overlay */}
-                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 text-white text-xs font-medium backdrop-blur-[1px]">
-                  <Eye className="w-4 h-4" />
-                  <span>Preview</span>
-                </div>
+                {!isExtracting && (
+                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 text-white text-xs font-medium backdrop-blur-[1px]">
+                    <Eye className="w-4 h-4" />
+                    <span>Click card to preview document</span>
+                  </div>
+                )}
               </div>
 
               {/* Filename underneath */}
@@ -179,14 +200,17 @@ export default function Screen02Staging({
             <button
               onClick={handleAddMoreClick}
               className="w-11 h-11 rounded-full bg-[#38BDF8] hover:bg-[#0284C7] active:scale-95 text-white flex items-center justify-center shadow-md transition"
-              title="Add more resume files"
+              title="+ Add More Files"
             >
               <Plus className="w-6 h-6 stroke-[2.5]" />
             </button>
           </div>
-          <span className="ml-4 text-xs text-gray-400 hidden sm:inline">
-            Drag & drop more files anytime
-          </span>
+          <button
+            onClick={handleAddMoreClick}
+            className="ml-4 text-xs font-semibold text-sky-700 hover:text-sky-900 transition"
+          >
+            + Add More Files
+          </button>
         </div>
 
         {/* Uploaded File Cards List */}
@@ -213,7 +237,7 @@ export default function Screen02Staging({
               {/* Remove Button */}
               <button
                 onClick={() => handleRemove(item.id)}
-                className="text-white/80 hover:text-white hover:bg-white/15 p-1 rounded-full transition flex-shrink-0"
+                className="text-white/80 hover:text-white hover:bg-white/15 p-1.5 rounded-full transition flex-shrink-0"
                 title="Remove file"
               >
                 <X className="w-4 h-4" />
@@ -222,7 +246,7 @@ export default function Screen02Staging({
           ))}
         </div>
 
-        {/* Bottom CTA Action Button Matching Screen 02 */}
+        {/* Bottom CTA Action Button Matching Screen 02 UX Writing */}
         <div className="pt-6">
           <button
             onClick={onExtractData}
@@ -232,11 +256,11 @@ export default function Screen02Staging({
             {isExtracting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Extracting {files.length} Resumes...</span>
+                <span>Analyzing Resumes...</span>
               </>
             ) : (
               <>
-                <span>Extract Data</span>
+                <span>Extract Data →</span>
                 <ArrowRightCircle className="w-5 h-5 text-white" />
               </>
             )}
@@ -252,14 +276,14 @@ export default function Screen02Staging({
               <div className="flex items-center gap-2 overflow-hidden">
                 <FileText className="w-4 h-4 text-appBlue flex-shrink-0" />
                 <h4 className="text-sm font-semibold text-gray-900 truncate">
-                  {previewFile.name}
+                  Resume Preview: {previewFile.name}
                 </h4>
               </div>
               <button
                 onClick={() => setPreviewFile(null)}
-                className="p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-200"
+                className="px-2.5 py-1 rounded-lg text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-200 transition"
               >
-                <X className="w-4 h-4" />
+                Close Preview
               </button>
             </div>
 

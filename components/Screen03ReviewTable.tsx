@@ -1,9 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import { ArrowLeft, Save, Check, ExternalLink, Download, RefreshCw } from "lucide-react";
+import { ArrowLeft, Save, Check, ExternalLink, Download, RefreshCw, AlertCircle, Info } from "lucide-react";
 import { CandidateRecord } from "@/lib/types";
 import { LIVE_EXCEL_DB_URL } from "./Screen01Upload";
+
+export interface SyncNotification {
+  type: "success" | "error";
+  savedCount?: number;
+  duplicateCount?: number;
+  errorMessage?: string;
+}
 
 interface Screen03ReviewTableProps {
   records: CandidateRecord[];
@@ -14,7 +21,7 @@ interface Screen03ReviewTableProps {
   onDownloadLocalBackup: () => void;
   onOpenCloudSync: () => void;
   hasCloudWebhook: boolean;
-  exportSuccessMessage: string | null;
+  notification: SyncNotification | null;
   isSaving?: boolean;
 }
 
@@ -27,22 +34,34 @@ export default function Screen03ReviewTable({
   onDownloadLocalBackup,
   onOpenCloudSync,
   hasCloudWebhook,
-  exportSuccessMessage,
+  notification,
   isSaving = false,
 }: Screen03ReviewTableProps) {
   const [activeCell, setActiveCell] = useState<{ row: number; col: string } | null>(null);
 
-  const columns: { key: keyof CandidateRecord; label: string; width: string; placeholder: string }[] = [
+  const columns: {
+    key: keyof CandidateRecord;
+    label: string;
+    width: string;
+    placeholder: string;
+    tooltip?: string;
+  }[] = [
     { key: "candidateName", label: "Candidate Name", width: "min-w-[150px]", placeholder: "Name" },
-    { key: "email", label: "Email ID", width: "min-w-[170px]", placeholder: "email@domain.com" },
+    { key: "email", label: "Email Address", width: "min-w-[175px]", placeholder: "email@domain.com" },
     { key: "contactNumber", label: "Contact Number", width: "min-w-[130px]", placeholder: "+1 234..." },
-    { key: "roleAppliedFor", label: "Role Applied For", width: "min-w-[160px]", placeholder: "Job Role" },
-    { key: "yearsOfExperience", label: "Years of Experience", width: "min-w-[110px]", placeholder: "Enter XP" },
-    { key: "currentCtc", label: "Current CTC", width: "min-w-[120px]", placeholder: "Enter Current CTC" },
-    { key: "expectedCtc", label: "Expected CTC", width: "min-w-[120px]", placeholder: "Enter Expected CTC" },
-    { key: "noticePeriod", label: "Notice Period", width: "min-w-[120px]", placeholder: "Enter Notice Period" },
-    { key: "notes", label: "Notes", width: "min-w-[180px]", placeholder: "Enter Notes" },
-    { key: "addedTimestamp", label: "Added Timestamp", width: "min-w-[140px]", placeholder: "" },
+    {
+      key: "roleAppliedFor",
+      label: "Current / Latest Role",
+      width: "min-w-[180px]",
+      placeholder: "Current Role",
+      tooltip: "Auto-extracted from current work history or headline",
+    },
+    { key: "yearsOfExperience", label: "Experience (Years)", width: "min-w-[130px]", placeholder: "Years of XP" },
+    { key: "currentCtc", label: "Current CTC", width: "min-w-[120px]", placeholder: "Current CTC" },
+    { key: "expectedCtc", label: "Expected CTC", width: "min-w-[120px]", placeholder: "Expected CTC" },
+    { key: "noticePeriod", label: "Notice Period", width: "min-w-[120px]", placeholder: "Notice Period" },
+    { key: "notes", label: "Key Skills & Highlights", width: "min-w-[200px]", placeholder: "Highlights" },
+    { key: "addedTimestamp", label: "Added On", width: "min-w-[140px]", placeholder: "" },
   ];
 
   const handleGoToLiveExcel = () => {
@@ -50,34 +69,77 @@ export default function Screen03ReviewTable({
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F6FB] flex flex-col justify-between p-4 sm:p-8 lg:p-12">
-      {/* Top Header */}
-      <div className="w-full max-w-7xl mx-auto flex flex-col items-center mb-6 relative">
-        <div className="sm:absolute sm:right-0 sm:top-0 mb-3 sm:mb-0">
+    <div className="min-h-screen bg-[#F5F6FB] flex flex-col justify-between p-4 sm:p-8 lg:p-10">
+      {/* Top Header & Navigation Bar */}
+      <div className="w-full max-w-7xl mx-auto flex flex-col mb-6">
+        {/* Top Actions Row */}
+        <div className="w-full flex items-center justify-between gap-3 mb-4">
           <button
-            onClick={onOpenCloudSync}
-            className="px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-sm"
-            title="Configure Live SharePoint/Cloud Sync"
+            onClick={onBack}
+            className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-medium shadow-sm flex items-center gap-1.5 transition"
+            title="← Back to Staging"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Live SharePoint: TEST.xlsx</span>
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>← Back to Staging</span>
           </button>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={onOpenCloudSync}
+              className="hidden sm:flex px-3 py-1.5 rounded-full text-xs font-medium border items-center gap-1.5 transition bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-sm"
+              title="Configure Live SharePoint/Cloud Sync"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Live SharePoint: TEST.xlsx</span>
+            </button>
+
+            <button
+              onClick={handleGoToLiveExcel}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-50 shadow-sm transition"
+              title="Open Live Excel DB in SharePoint"
+            >
+              <span>Open Live Excel DB</span>
+              <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+            </button>
+          </div>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-bold text-[#1F2937] tracking-tight mb-2 text-center">
-          PDFs have been merged!
-        </h1>
-        <p className="text-xs sm:text-sm text-gray-500 text-center max-w-2xl">
-          Review and edit the extracted candidate information. Clicking &quot;Export to Excel&quot; will automatically sync verified candidates to your live SharePoint file, segregated by job role.
-        </p>
+        {/* Section Header & Instructions */}
+        <div className="flex flex-col items-center text-center">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#1F2937] tracking-tight mb-2">
+            Review & Verify Candidate Profiles
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 max-w-2xl">
+            Candidate data and latest designations have been extracted. Edit any cell inline before saving to the live database.
+          </p>
 
-        {/* Success / Status Alert Banner */}
-        {exportSuccessMessage && (
-          <div className="mt-4 px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-medium flex items-center gap-2 shadow-sm animate-in fade-in">
-            <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <span>{exportSuccessMessage}</span>
-          </div>
-        )}
+          {/* System Notifications & Feedback (Post-Click) */}
+          {notification && notification.type === "success" && (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 animate-in fade-in duration-200">
+              <div className="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm">
+                <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>
+                  Successfully saved {notification.savedCount ?? records.length} candidate(s) to the Excel database.
+                </span>
+              </div>
+              {typeof notification.duplicateCount === "number" && notification.duplicateCount > 0 && (
+                <div className="px-3.5 py-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-1.5 shadow-sm">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                  <span>{notification.duplicateCount} duplicate entries were identified and omitted.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {notification && notification.type === "error" && (
+            <div className="mt-4 px-4 py-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm animate-in fade-in duration-200">
+              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+              <span>
+                Unable to sync to the live sheet. Please verify your connection or database permissions and retry.
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Table Container Matching Screen 03 */}
@@ -93,8 +155,20 @@ export default function Screen03ReviewTable({
                 <th
                   key={col.key}
                   className={`py-3 px-3.5 font-semibold border-r border-blue-800/60 last:border-r-0 ${col.width}`}
+                  title={col.tooltip}
                 >
-                  {col.label}
+                  <div className="flex items-center gap-1.5">
+                    <span>{col.label}</span>
+                    {col.tooltip && (
+                      <span
+                        title={col.tooltip}
+                        aria-label={col.tooltip}
+                        className="cursor-help inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-white/20 hover:bg-white/35 text-[10px] text-white font-bold transition"
+                      >
+                        i
+                      </span>
+                    )}
+                  </div>
                 </th>
               ))}
             </tr>
@@ -158,42 +232,44 @@ export default function Screen03ReviewTable({
       </div>
 
       {/* Action Row Underneath Table Matching Screen 03 */}
-      <div className="w-full max-w-7xl mx-auto mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 relative">
-        {/* Back Button (Circular Dark Grey) */}
+      <div className="w-full max-w-7xl mx-auto mt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Secondary Action: Back to Staging */}
         <button
           onClick={onBack}
-          className="w-10 h-10 rounded-full bg-[#5E6470] hover:bg-[#4B515C] active:scale-95 text-white flex items-center justify-center shadow-sm transition sm:absolute sm:left-4"
-          title="Back to file staging"
+          className="py-3 px-5 rounded-xl bg-white hover:bg-gray-50 active:scale-[0.98] text-gray-700 font-medium text-sm border border-gray-300 shadow-sm transition flex items-center gap-2 self-start sm:self-auto"
+          title="← Back to Staging"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4" />
+          <span>← Back to Staging</span>
         </button>
 
         {/* Center Action Buttons */}
         <div className="flex items-center gap-4 flex-wrap justify-center">
-          {/* Go to Excel DB (Green Border, Redirects to Live SharePoint Excel) */}
+          {/* External Link Action: Open Live Excel DB */}
           <button
             onClick={handleGoToLiveExcel}
             className="w-52 py-3.5 px-6 rounded-xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-[#15803D] font-medium text-base border-2 border-[#16A34A] shadow-sm transition flex items-center justify-center gap-2"
+            title="Open Live Excel DB"
           >
-            <span>Go to Excel DB</span>
+            <span>Open Live Excel DB</span>
             <ExternalLink className="w-4 h-4 text-[#16A34A]" />
           </button>
 
-          {/* Export to Excel CTA (Acts as Save to Database Action & Syncs to SharePoint) */}
+          {/* Primary CTA: Save to Database (Active Saving State: Syncing to Excel DB...) */}
           <button
             onClick={onSaveToDatabase}
             disabled={isSaving}
             className="w-56 py-3.5 px-6 rounded-xl bg-[#00529B] hover:bg-[#00407A] active:scale-[0.98] text-white font-medium text-base shadow-md flex items-center justify-center gap-2.5 transition disabled:opacity-75 disabled:cursor-not-allowed"
-            title="Save and push candidates to live SharePoint Excel (TEST.xlsx)"
+            title="Save to Database"
           >
             {isSaving ? (
               <>
                 <RefreshCw className="w-4 h-4 text-white animate-spin" />
-                <span>Syncing to Excel...</span>
+                <span>Syncing to Excel DB...</span>
               </>
             ) : (
               <>
-                <span>Export to Excel</span>
+                <span>Save to Database</span>
                 <Save className="w-4 h-4 text-white" />
               </>
             )}
@@ -201,7 +277,7 @@ export default function Screen03ReviewTable({
         </div>
 
         {/* Secondary Download Local Backup Option */}
-        <div className="sm:absolute sm:right-4 flex items-center gap-3 text-xs">
+        <div className="flex items-center gap-3 text-xs">
           <button
             onClick={onDownloadLocalBackup}
             className="text-gray-500 hover:text-gray-800 flex items-center gap-1 hover:underline"

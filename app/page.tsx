@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Screen01Upload from "@/components/Screen01Upload";
 import Screen02Staging from "@/components/Screen02Staging";
-import Screen03ReviewTable from "@/components/Screen03ReviewTable";
+import Screen03ReviewTable, { SyncNotification } from "@/components/Screen03ReviewTable";
 import ExcelDbModal from "@/components/ExcelDbModal";
 import ApiKeyModal from "@/components/ApiKeyModal";
 import CloudSyncModal from "@/components/CloudSyncModal";
@@ -28,7 +28,7 @@ export default function Home() {
   const [isExcelDbOpen, setIsExcelDbOpen] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
-  const [exportSuccessMessage, setExportSuccessMessage] = useState<string | null>(null);
+  const [notification, setNotification] = useState<SyncNotification | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Load stored DB, API key, and Webhook on mount
@@ -238,13 +238,14 @@ export default function Home() {
     });
   };
 
-  // Screen 03 -> "Export to Excel" CTA: Saves locally and directly syncs to live SharePoint Excel
+  // Screen 03 -> "Save to Database" CTA: Saves locally and directly syncs to live SharePoint Excel
   const handleSaveToDatabase = async () => {
     if (records.length === 0) return;
     setIsSaving(true);
+    setNotification(null);
 
     // 1. Deduplicate against existing local DB
-    const { merged } = mergeCandidatesDeduplicated(
+    const { merged, addedCount: localAdded, duplicateCount: localDuplicates } = mergeCandidatesDeduplicated(
       database,
       records
     );
@@ -268,34 +269,32 @@ export default function Home() {
 
       const data = await res.json();
 
-      if (data.success && data.directSharepoint) {
-        const roleSheets = (data.sheets || [])
-          .filter((s: string) => s !== "All Candidates")
-          .join(", ");
-        const roleDetails = roleSheets ? ` (Role tabs: ${roleSheets})` : "";
-        setExportSuccessMessage(
-          `✅ Saved and synced ${data.addedRecords ?? records.length} candidate(s) to live SharePoint Excel (TEST.xlsx)!${roleDetails}`
-        );
-      } else if (data.success) {
-        setExportSuccessMessage(
-          `✅ Saved ${records.length} candidate(s) to database successfully!`
-        );
+      if (data.success) {
+        const savedCount = data.addedRecords ?? localAdded ?? records.length;
+        const duplicateCount = data.duplicateRecords ?? localDuplicates ?? 0;
+        setNotification({
+          type: "success",
+          savedCount,
+          duplicateCount,
+        });
       } else {
-        setExportSuccessMessage(
-          `⚠️ Saved to local database. (SharePoint note: ${data.error || "Sync pending"})`
-        );
+        setNotification({
+          type: "error",
+          errorMessage: "Unable to sync to the live sheet. Please verify your connection or database permissions and retry.",
+        });
       }
     } catch (err: any) {
       console.warn("Cloud sync error:", err);
-      setExportSuccessMessage(
-        `Saved to local database. (Network sync note: ${err.message})`
-      );
+      setNotification({
+        type: "error",
+        errorMessage: "Unable to sync to the live sheet. Please verify your connection or database permissions and retry.",
+      });
     } finally {
       setIsSaving(false);
     }
 
     setTimeout(() => {
-      setExportSuccessMessage(null);
+      setNotification(null);
     }, 8000);
   };
 
@@ -363,7 +362,7 @@ export default function Home() {
           onDownloadLocalBackup={handleDownloadLocalBackup}
           onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
           hasCloudWebhook={Boolean(cloudWebhookUrl)}
-          exportSuccessMessage={exportSuccessMessage}
+          notification={notification}
           isSaving={isSaving}
         />
       )}

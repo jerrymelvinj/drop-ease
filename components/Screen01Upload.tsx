@@ -96,74 +96,88 @@ export default function Screen01Upload({
           <button
             onClick={onLoadDemoSamples}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm transition"
-            title="Try with preloaded test resumes"
+            title="Try a test run with sample candidate profiles."
           >
             <FileCheck className="w-3.5 h-3.5 text-blue-600" />
             <span>Load Demo Resumes</span>
           </button>
 
-          <button
-            onClick={onOpenApiKeyModal}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
-              hasApiKey
-                ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50 shadow-sm"
-            }`}
-            title="Configure Gemini API Key"
+          <div
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-sm"
+            title="AI Extraction Engine Active"
           >
-            {hasApiKey ? (
-              <>
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Gemini AI Active</span>
-              </>
-            ) : (
-              <>
-                <KeyRound className="w-3.5 h-3.5 text-gray-500" />
-                <span>Configure Gemini API</span>
-              </>
-            )}
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>AI Parser Active</span>
+          </div>
+
+          <button
+            onClick={handleGoToLiveExcel}
+            className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-50 shadow-sm transition"
+            title="Opens your live SharePoint sheet in a new tab"
+          >
+            <span>Open Live Excel DB</span>
+            <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
           </button>
         </div>
       </header>
 
-      {/* Center Hero Section Matching Screen 01 */}
+      {/* Center Hero Section Matching Screen 01 UX Writing */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-10">
         <div className="text-center max-w-xl mx-auto">
           <h1 className="text-3xl sm:text-4xl font-bold text-[#1F2937] tracking-tight mb-3">
-            Merge PDF files
+            Drop resumes here to parse
           </h1>
-          <p className="text-sm sm:text-base text-gray-600 font-normal leading-relaxed mb-10">
-            Combine PDFs in the order you want with the easiest PDF merger available.
+          <p className="text-sm sm:text-base text-gray-600 font-normal leading-relaxed mb-8">
+            Upload PDF or DOCX files to automatically extract candidate details and current designations.
           </p>
 
           {/* Action Buttons Row */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            {/* Grey Button: Select PDF files */}
+            {/* Grey Button: Select Files */}
             <div className="flex flex-col items-center">
               <button
                 onClick={handleSelectFilesClick}
                 className="w-56 py-3.5 px-6 rounded-xl bg-[#6B7280] hover:bg-[#5A606B] active:scale-[0.98] text-white font-medium text-base shadow-md transition-all duration-150"
               >
-                Select PDF files
+                Select Files
               </button>
               <span className="text-xs text-gray-500 mt-2 font-light">
                 or drop PDFs here
               </span>
             </div>
 
-            {/* Green Bordered Button: Go to Excel DB (Redirects to Live SharePoint Excel) */}
+            {/* Green Bordered Button: Open Live Excel DB */}
             <div className="flex flex-col items-center">
               <button
                 onClick={handleGoToLiveExcel}
                 className="w-56 py-3.5 px-6 rounded-xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-[#15803D] font-medium text-base border-2 border-[#16A34A] shadow-sm transition-all duration-150 flex items-center justify-center gap-2"
               >
-                <span>Go to Excel DB</span>
+                <span>Open Live Excel DB</span>
                 <ExternalLink className="w-4 h-4 text-[#16A34A]" />
               </button>
               <span className="text-xs text-transparent mt-2 select-none">
                 db link
               </span>
             </div>
+          </div>
+
+          {/* Format & Constraint Helper */}
+          <p className="text-xs text-gray-400 mt-6 font-normal">
+            Supports PDF and DOCX · Batch upload 10+ resumes at once
+          </p>
+
+          {/* Quick Testing / Empty State Helper */}
+          <div className="mt-4 pt-4 border-t border-gray-200/60 inline-flex flex-col items-center">
+            <span className="text-xs text-gray-500 mb-2">
+              Try a test run with sample candidate profiles.
+            </span>
+            <button
+              onClick={onLoadDemoSamples}
+              className="text-xs font-medium text-[#00529B] hover:text-[#003B70] underline flex items-center gap-1"
+            >
+              <FileCheck className="w-3.5 h-3.5" />
+              <span>Load Demo Resumes</span>
+            </button>
           </div>
         </div>
       </main>
