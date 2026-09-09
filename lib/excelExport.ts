@@ -44,6 +44,76 @@ export function getColorForRole(roleName: string, index = 0): string {
   return DYNAMIC_COLORS[index % DYNAMIC_COLORS.length];
 }
 
+export interface StatusColorDefinition {
+  bgArgb: string;
+  fgArgb: string;
+  borderArgb: string;
+  webBgClass: string;
+  webBorderClass: string;
+  label: string;
+}
+
+export function getStatusOfferColor(
+  status?: string,
+  offerStatus?: string
+): StatusColorDefinition {
+  const s = (status || "Under Review").trim();
+  const o = (offerStatus || "Pending").trim();
+
+  if (s === "Selected") {
+    if (o === "Accepted") {
+      return {
+        bgArgb: "FFBBF7D0", // Vibrant Emerald / Success Green
+        fgArgb: "FF14532D",
+        borderArgb: "FF86EFAC",
+        webBgClass: "bg-emerald-100/90 hover:bg-emerald-200/90 text-emerald-950 font-medium",
+        webBorderClass: "border-emerald-300",
+        label: "Selected · Offer Accepted",
+      };
+    }
+    if (o === "Rejected") {
+      return {
+        bgArgb: "FFFECDD3", // Soft Coral / Rose Red
+        fgArgb: "FF9F1239",
+        borderArgb: "FFF43F5E",
+        webBgClass: "bg-rose-100/90 hover:bg-rose-200/90 text-rose-950 font-medium",
+        webBorderClass: "border-rose-300",
+        label: "Selected · Offer Rejected",
+      };
+    }
+    // Pending
+    return {
+      bgArgb: "FFDCFCE7", // Fresh Light Green / Mint
+      fgArgb: "FF166534",
+      borderArgb: "FF86EFAC",
+      webBgClass: "bg-green-50 hover:bg-green-100/90 text-green-950 font-medium",
+      webBorderClass: "border-green-300",
+      label: "Selected · Offer Pending",
+    };
+  }
+
+  if (s === "Rejected") {
+    return {
+      bgArgb: "FFFEE2E2", // Soft Warning / Danger Red
+      fgArgb: "FF991B1B",
+      borderArgb: "FFFCA5A5",
+      webBgClass: "bg-rose-50 hover:bg-rose-100/90 text-rose-950",
+      webBorderClass: "border-rose-300",
+      label: "Rejected",
+    };
+  }
+
+  // Default: Under Review (On Hold)
+  return {
+    bgArgb: "FFFEF3C7", // Soft Warm Amber / Yellow
+    fgArgb: "FF92400E",
+    borderArgb: "FFFDE68A",
+    webBgClass: "bg-amber-50 hover:bg-amber-100/90 text-amber-950",
+    webBorderClass: "border-amber-300",
+    label: "Under Review (On Hold)",
+  };
+}
+
 function recordToRowObject(rec: CandidateRecord, index: number) {
   return {
     "S.No": index + 1,
@@ -258,8 +328,7 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
 
       const row = ws.addRow(rowValues);
       row.height = 22;
-      const isEven = rIdx % 2 === 0;
-      const rowBg = isEven ? "FFFFFFFF" : "FFF8FAFC";
+      const statusColor = getStatusOfferColor(rec.status, rec.offerStatus);
 
       // Native Dropdown Data Validations in Excel
       row.getCell(13).dataValidation = {
@@ -280,24 +349,28 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
         error: "Please select Pending, Accepted, or Rejected.",
       };
 
+      // Interview Schedule with Calendar & Clock prompt
+      row.getCell(12).numFmt = "@";
       row.getCell(12).dataValidation = {
         type: "custom",
         allowBlank: true,
         formulae: ["TRUE"],
-        promptTitle: "Interview Schedule",
-        prompt: "Format: DD/MM/YYYY, HH:MM AM/PM",
+        showInputMessage: true,
+        promptTitle: "📅⏰ Interview Schedule",
+        prompt: "Format: DD/MM/YYYY, HH:MM AM/PM (e.g. 15/09/2026, 11:00 AM)",
       };
 
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         cell.font = {
           name: "Segoe UI",
           size: 10,
-          color: { argb: "FF1F2937" },
+          color: { argb: statusColor.fgArgb },
+          bold: rec.status === "Selected" && rec.offerStatus === "Accepted",
         };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: rowBg },
+          fgColor: { argb: statusColor.bgArgb },
         };
         cell.alignment = {
           vertical: "middle",
@@ -307,12 +380,96 @@ export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Prom
               : "left",
         };
         cell.border = {
-          top: { style: "thin", color: { argb: "FFE2E8F0" } },
-          bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
-          left: { style: "thin", color: { argb: "FFE2E8F0" } },
-          right: { style: "thin", color: { argb: "FFE2E8F0" } },
+          top: { style: "thin", color: { argb: statusColor.borderArgb } },
+          bottom: { style: "thin", color: { argb: statusColor.borderArgb } },
+          left: { style: "thin", color: { argb: statusColor.borderArgb } },
+          right: { style: "thin", color: { argb: statusColor.borderArgb } },
         };
       });
+    });
+
+    // 3. Attach Dynamic OpenXML Conditional Formatting Rules
+    // Applies across all candidate rows so that live dropdown edits in Excel Online dynamically recolor the row
+    const maxRow = Math.max(100, items.length + 50);
+    ws.addConditionalFormatting({
+      ref: `A2:O${maxRow}`,
+      rules: [
+        // Priority 1: Selected + Offer Accepted -> Vibrant Emerald Green
+        {
+          type: "expression",
+          priority: 1,
+          formulae: ['AND($M2="Selected", $N2="Accepted")'],
+          style: {
+            fill: {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFBBF7D0" },
+              bgColor: { argb: "FFBBF7D0" },
+            },
+            font: { color: { argb: "FF14532D" }, bold: true },
+          },
+        },
+        // Priority 2: Selected + Offer Rejected -> Soft Coral / Rose Red
+        {
+          type: "expression",
+          priority: 2,
+          formulae: ['AND($M2="Selected", $N2="Rejected")'],
+          style: {
+            fill: {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFFECDD3" },
+              bgColor: { argb: "FFFECDD3" },
+            },
+            font: { color: { argb: "FF9F1239" } },
+          },
+        },
+        // Priority 3: Selected + Offer Pending (or blank) -> Fresh Light Green
+        {
+          type: "expression",
+          priority: 3,
+          formulae: ['AND($M2="Selected", OR($N2="Pending", $N2=""))'],
+          style: {
+            fill: {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFDCFCE7" },
+              bgColor: { argb: "FFDCFCE7" },
+            },
+            font: { color: { argb: "FF166534" } },
+          },
+        },
+        // Priority 4: Status is Rejected -> Soft Light Red
+        {
+          type: "expression",
+          priority: 4,
+          formulae: ['$M2="Rejected"'],
+          style: {
+            fill: {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFFEE2E2" },
+              bgColor: { argb: "FFFEE2E2" },
+            },
+            font: { color: { argb: "FF991B1B" } },
+          },
+        },
+        // Priority 5: Status is Under Review (On Hold) -> Soft Warm Amber / Yellow
+        {
+          type: "expression",
+          priority: 5,
+          formulae: ['$M2="Under Review"'],
+          style: {
+            fill: {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFFEF3C7" },
+              bgColor: { argb: "FFFEF3C7" },
+            },
+            font: { color: { argb: "FF92400E" } },
+          },
+        },
+      ],
     });
   }
 

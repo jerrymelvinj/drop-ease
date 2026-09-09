@@ -199,10 +199,33 @@ async function runTestSuite() {
   assert(allWs?.getCell("M2").dataValidation?.type === "list", "Status column has native Excel dropdown data validation (type: list)");
   assert(allWs?.getCell("N2").dataValidation?.type === "list", "Offer Status column has native Excel dropdown data validation (type: list)");
 
+  // Verify Interview Schedule Calendar & Clock Prompt
+  assert(Boolean(allWs?.getCell("L2").dataValidation?.promptTitle?.includes("Interview Schedule")), "Interview Schedule column has interactive calendar & clock input prompt");
+
+  // Verify OpenXML Conditional Formatting Rules
+  const allWsAny = allWs as any;
+  assert(Boolean(allWsAny?.conditionalFormattings && allWsAny.conditionalFormattings.length > 0), "Sheet contains OpenXML Conditional Formatting definitions");
+  const cfRules = allWsAny?.conditionalFormattings[0].rules || [];
+  assert(cfRules.length === 5, "Conditional formatting defines all 5 hierarchical status & offer rules");
+  assert(cfRules[0].formulae[0].includes('AND($M2="Selected", $N2="Accepted")'), "Priority 1 Rule correctly checks Selected + Offer Accepted");
+  assert(cfRules[1].formulae[0].includes('AND($M2="Selected", $N2="Rejected")'), "Priority 2 Rule correctly checks Selected + Offer Rejected");
+  assert(cfRules[2].formulae[0].includes('AND($M2="Selected"'), "Priority 3 Rule correctly checks Selected + Offer Pending");
+  assert(cfRules[3].formulae[0].includes('$M2="Rejected"'), "Priority 4 Rule correctly checks Rejected");
+  assert(cfRules[4].formulae[0].includes('$M2="Under Review"'), "Priority 5 Rule correctly checks Under Review (On Hold)");
+
+  // Verify getStatusOfferColor hierarchy
+  const { getStatusOfferColor } = await import("./lib/excelExport");
+  assert(getStatusOfferColor("Under Review").bgArgb === "FFFEF3C7", "Under Review maps to Amber (On Hold) fill");
+  assert(getStatusOfferColor("Rejected").bgArgb === "FFFEE2E2", "Rejected maps to Light Red fill");
+  assert(getStatusOfferColor("Selected", "Pending").bgArgb === "FFDCFCE7", "Selected + Pending maps to Light Green fill");
+  assert(getStatusOfferColor("Selected", "Accepted").bgArgb === "FFBBF7D0", "Selected + Accepted maps to Vibrant Emerald fill");
+  assert(getStatusOfferColor("Selected", "Rejected").bgArgb === "FFFECDD3", "Selected + Rejected maps to Coral Rose fill");
+
   // Verify Dynamic Formula Interconnection between Master Sheet and Role Subpages
   const fsWs = styledWb.getWorksheet("Full Stack Developer");
   const childFormula = (fsWs?.getCell("M2").value as any)?.formula;
   assert(Boolean(childFormula && childFormula.includes("'All Candidates'!")), "Role subpage links dynamically to 'All Candidates' via Excel formula");
+  assert(Boolean((fsWs as any)?.conditionalFormattings && (fsWs as any).conditionalFormattings.length > 0), "Role subpage also contains synchronized conditional formatting rules");
 
   // 7. Live SharePoint Direct Sync Engine
   console.log("\n--- TEST GROUP 7: Live SharePoint Direct Sync Engine ---");
