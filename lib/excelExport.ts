@@ -1,3 +1,4 @@
+import ExcelJS from "exceljs";
 import * as XLSX from "xlsx";
 import { CandidateRecord } from "./types";
 
@@ -15,6 +16,30 @@ export const EXCEL_COLUMNS = [
   "Added Timestamp",
 ];
 
+export const ROLE_COLORS: Record<string, string> = {
+  "all candidates": "FF00529B", // Signature Deep Blue
+  "full stack developer": "FF1D4ED8", // Royal Blue
+  "marketing manager": "FF7C3AED", // Vibrant Purple
+  "sales manager": "FF059669", // Emerald Green
+  "operations manager": "FF0D9488", // Deep Teal
+  "lead data scientist": "FFBE185D", // Fuchsia / Rose
+  "devops engineer": "FF0891B2", // Cyan / Slate Blue
+  "product manager": "FFEA580C", // Coral Orange
+  "ui ux designer": "FFDB2777", // Pink
+  "e-commerce specialist": "FFD97706", // Amber / Warm Gold
+};
+
+export const DYNAMIC_COLORS = [
+  "FF2563EB", "FF059669", "FF7C3AED", "FFD97706", "FFDC2626",
+  "FF0891B2", "FF4F46E5", "FFDB2777", "FF0D9488", "FF65A30D"
+];
+
+export function getColorForRole(roleName: string, index = 0): string {
+  const norm = (roleName || "").toLowerCase().trim();
+  if (ROLE_COLORS[norm]) return ROLE_COLORS[norm];
+  return DYNAMIC_COLORS[index % DYNAMIC_COLORS.length];
+}
+
 function recordToRowObject(rec: CandidateRecord, index: number) {
   return {
     "S.No": index + 1,
@@ -27,7 +52,7 @@ function recordToRowObject(rec: CandidateRecord, index: number) {
     "Expected CTC": rec.expectedCtc || "",
     "Notice Period": rec.noticePeriod || "",
     "Notes": rec.notes || "",
-    "Added Timestamp": rec.addedTimestamp || new Date().toISOString(),
+    "Added Timestamp": rec.addedTimestamp || new Date().toISOString().replace("T", " ").slice(0, 19),
   };
 }
 
@@ -83,7 +108,7 @@ export function mergeCandidatesDeduplicated(
 /**
  * Sanitize an Excel sheet name (max 31 chars, no special chars : \ / ? * [ ])
  */
-function sanitizeSheetName(name: string, existingNames: Set<string>): string {
+export function sanitizeSheetName(name: string, existingNames: Set<string>): string {
   let clean = name.replace(/[:\\/?*\[\]]/g, " ").trim();
   if (!clean) clean = "General";
   clean = clean.slice(0, 31).trim();
@@ -100,32 +125,179 @@ function sanitizeSheetName(name: string, existingNames: Set<string>): string {
 }
 
 /**
- * Generates an Excel Workbook with segregation by Role Applied For, plus an All Candidates sheet.
+ * Builds a professionally styled Excel workbook with:
+ * - Distinct solid color & bold white text for top header row on each page
+ * - Colored worksheet tab for each role
+ * - Full column formatting so titles like "Expected CTC" and "Added Timestamp" are never truncated
+ * - Alternating zebra rows and subtle grid lines
+ */
+export async function buildStyledExcelWorkbook(records: CandidateRecord[]): Promise<ExcelJS.Workbook> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "HR Resume Intake System";
+  wb.lastModifiedBy = "HR Resume Intake System";
+  wb.created = new Date();
+  wb.modified = new Date();
+
+  const columnsDef = [
+    { header: "S.No", key: "sNo", width: 8 },
+    { header: "Candidate Name", key: "candidateName", width: 25 },
+    { header: "Email ID", key: "email", width: 32 },
+    { header: "Contact Number", key: "contactNumber", width: 20 },
+    { header: "Role Applied For", key: "roleAppliedFor", width: 26 },
+    { header: "Years of Experience", key: "yearsOfExperience", width: 20 },
+    { header: "Current CTC", key: "currentCtc", width: 16 },
+    { header: "Expected CTC", key: "expectedCtc", width: 16 },
+    { header: "Notice Period", key: "noticePeriod", width: 16 },
+    { header: "Notes", key: "notes", width: 42 },
+    { header: "Added Timestamp", key: "addedTimestamp", width: 22 },
+  ];
+
+  function addWorksheetWithStyling(
+    title: string,
+    items: CandidateRecord[],
+    colorHex: string
+  ) {
+    const ws = wb.addWorksheet(title, {
+      properties: { tabColor: { argb: colorHex } },
+    });
+    ws.columns = columnsDef;
+
+    // 1. Style Header Row (Row 1)
+    const headerRow = ws.getRow(1);
+    headerRow.height = 28;
+    headerRow.eachCell((cell, colNumber) => {
+      cell.font = {
+        name: "Segoe UI",
+        size: 11,
+        bold: true,
+        color: { argb: "FFFFFFFF" },
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: colorHex },
+      };
+      cell.alignment = {
+        vertical: "middle",
+        horizontal:
+          colNumber === 1 || colNumber === 6 || colNumber === 9 || colNumber === 11
+            ? "center"
+            : "left",
+      };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FF334155" } },
+        bottom: { style: "medium", color: { argb: "FF0F172A" } },
+        left: { style: "thin", color: { argb: "FF334155" } },
+        right: { style: "thin", color: { argb: "FF334155" } },
+      };
+    });
+
+    // 2. Add Data Rows
+    items.forEach((rec, rIdx) => {
+      const row = ws.addRow({
+        sNo: rIdx + 1,
+        candidateName: rec.candidateName || "",
+        email: rec.email || "",
+        contactNumber: rec.contactNumber || "",
+        roleAppliedFor: rec.roleAppliedFor || "General",
+        yearsOfExperience: rec.yearsOfExperience || "",
+        currentCtc: rec.currentCtc || "",
+        expectedCtc: rec.expectedCtc || "",
+        noticePeriod: rec.noticePeriod || "",
+        notes: rec.notes || "",
+        addedTimestamp: rec.addedTimestamp || "",
+      });
+
+      row.height = 22;
+      const isEven = rIdx % 2 === 0;
+      const rowBg = isEven ? "FFFFFFFF" : "FFF8FAFC";
+
+      row.eachCell((cell, colNumber) => {
+        cell.font = {
+          name: "Segoe UI",
+          size: 10,
+          color: { argb: "FF1F2937" },
+        };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: rowBg },
+        };
+        cell.alignment = {
+          vertical: "middle",
+          horizontal:
+            colNumber === 1 || colNumber === 6 || colNumber === 9 || colNumber === 11
+              ? "center"
+              : "left",
+        };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFE2E8F0" } },
+          bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+          left: { style: "thin", color: { argb: "FFE2E8F0" } },
+          right: { style: "thin", color: { argb: "FFE2E8F0" } },
+        };
+      });
+    });
+  }
+
+  const sheetNames = new Set<string>();
+
+  // 1. "All Candidates" Master Sheet
+  addWorksheetWithStyling(
+    "All Candidates",
+    records,
+    ROLE_COLORS["all candidates"]
+  );
+  sheetNames.add("all candidates");
+
+  // 2. Group records by "Role Applied For"
+  const roleGroups: { [role: string]: CandidateRecord[] } = {};
+  for (const rec of records) {
+    const roleKey =
+      (rec.roleAppliedFor || "General / Unassigned").trim() ||
+      "General / Unassigned";
+    if (!roleGroups[roleKey]) {
+      roleGroups[roleKey] = [];
+    }
+    roleGroups[roleKey].push(rec);
+  }
+
+  // 3. Create a worksheet for each unique Role
+  let colorCounter = 1;
+  for (const [roleName, roleRecords] of Object.entries(roleGroups)) {
+    const sheetTitle = sanitizeSheetName(roleName, sheetNames);
+    const color = getColorForRole(roleName, colorCounter++);
+    addWorksheetWithStyling(sheetTitle, roleRecords, color);
+  }
+
+  return wb;
+}
+
+/**
+ * Generates an Excel Workbook with segregation by Role Applied For, plus an All Candidates sheet (SheetJS compatible).
  */
 export function generateRoleSegregatedWorkbook(records: CandidateRecord[]): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
   const sheetNames = new Set<string>();
 
-  // 1. "All Candidates" Master Sheet
   const allRows = records.map((r, i) => recordToRowObject(r, i));
   const masterSheet = XLSX.utils.json_to_sheet(allRows, { header: EXCEL_COLUMNS });
   masterSheet["!cols"] = [
-    { wch: 6 },  // S.No
-    { wch: 22 }, // Name
-    { wch: 28 }, // Email
-    { wch: 18 }, // Phone
-    { wch: 25 }, // Role
-    { wch: 18 }, // Experience
-    { wch: 15 }, // Current CTC
-    { wch: 15 }, // Expected CTC
+    { wch: 8 },  // S.No
+    { wch: 25 }, // Name
+    { wch: 32 }, // Email
+    { wch: 20 }, // Phone
+    { wch: 26 }, // Role
+    { wch: 20 }, // Experience
+    { wch: 16 }, // Current CTC
+    { wch: 16 }, // Expected CTC
     { wch: 16 }, // Notice Period
-    { wch: 30 }, // Notes
+    { wch: 40 }, // Notes
     { wch: 22 }, // Timestamp
   ];
   XLSX.utils.book_append_sheet(wb, masterSheet, "All Candidates");
   sheetNames.add("all candidates");
 
-  // 2. Group records by "Role Applied For"
   const roleGroups: { [role: string]: CandidateRecord[] } = {};
   for (const rec of records) {
     const roleKey = (rec.roleAppliedFor || "General / Unassigned").trim() || "General / Unassigned";
@@ -135,22 +307,21 @@ export function generateRoleSegregatedWorkbook(records: CandidateRecord[]): XLSX
     roleGroups[roleKey].push(rec);
   }
 
-  // 3. Create a worksheet for each unique Role
   for (const [roleName, roleRecords] of Object.entries(roleGroups)) {
     const sheetTitle = sanitizeSheetName(roleName, sheetNames);
     const roleRows = roleRecords.map((r, i) => recordToRowObject(r, i));
     const roleSheet = XLSX.utils.json_to_sheet(roleRows, { header: EXCEL_COLUMNS });
     roleSheet["!cols"] = [
-      { wch: 6 },
-      { wch: 22 },
-      { wch: 28 },
-      { wch: 18 },
+      { wch: 8 },
       { wch: 25 },
-      { wch: 18 },
-      { wch: 15 },
-      { wch: 15 },
+      { wch: 32 },
+      { wch: 20 },
+      { wch: 26 },
+      { wch: 20 },
       { wch: 16 },
-      { wch: 30 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 40 },
       { wch: 22 },
     ];
     XLSX.utils.book_append_sheet(wb, roleSheet, sheetTitle);
@@ -160,9 +331,26 @@ export function generateRoleSegregatedWorkbook(records: CandidateRecord[]): XLSX
 }
 
 /**
- * Downloads the Excel database file directly to the user's browser.
+ * Downloads the styled Excel database file directly to the user's browser.
  */
-export function downloadExcelDatabase(records: CandidateRecord[], fileName = "hr_candidates_db.xlsx") {
-  const wb = generateRoleSegregatedWorkbook(records);
-  XLSX.writeFile(wb, fileName);
+export async function downloadExcelDatabase(records: CandidateRecord[], fileName = "hr_candidates_db.xlsx") {
+  try {
+    const wb = await buildStyledExcelWorkbook(records);
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.warn("ExcelJS client download fallback to SheetJS:", err);
+    const wb = generateRoleSegregatedWorkbook(records);
+    XLSX.writeFile(wb, fileName);
+  }
 }

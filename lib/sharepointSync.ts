@@ -1,7 +1,7 @@
 import https from "https";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { CandidateRecord } from "./types";
-import { EXCEL_COLUMNS } from "./excelExport";
+import { buildStyledExcelWorkbook } from "./excelExport";
 
 export const DEFAULT_SHAREPOINT_DB_URL =
   "https://akoimarketing-my.sharepoint.com/:x:/g/personal/career_akoi_in/IQD4TYUI8Xz1SJ4qcHes2gJFAbb78vco-WIisH_YTS9jS1g?e=lUvVIX";
@@ -24,7 +24,7 @@ function httpRequest(
         path: parsed.pathname + parsed.search,
         method: options.method || "GET",
         headers: options.headers || {},
-        timeout: options.timeout || 20000,
+        timeout: options.timeout || 25000,
       },
       (res) => {
         const data: Buffer[] = [];
@@ -48,36 +48,8 @@ function httpRequest(
   });
 }
 
-function sanitizeSheetName(name: string, existingNames: Set<string>): string {
-  let clean = name.replace(/[:\\/?*\[\]]/g, " ").trim();
-  if (!clean) clean = "General";
-  clean = clean.slice(0, 31).trim();
-
-  let candidate = clean;
-  let counter = 2;
-  while (existingNames.has(candidate.toLowerCase())) {
-    const suffix = ` (${counter})`;
-    candidate = clean.slice(0, 31 - suffix.length) + suffix;
-    counter++;
-  }
-  existingNames.add(candidate.toLowerCase());
-  return candidate;
-}
-
-function recordToRowObject(rec: CandidateRecord, index: number) {
-  return {
-    "S.No": index + 1,
-    "Candidate Name": rec.candidateName || "",
-    "Email ID": rec.email || "",
-    "Contact Number": rec.contactNumber || "",
-    "Role Applied For": rec.roleAppliedFor || "General",
-    "Years of Experience": rec.yearsOfExperience || "",
-    "Current CTC": rec.currentCtc || "",
-    "Expected CTC": rec.expectedCtc || "",
-    "Notice Period": rec.noticePeriod || "",
-    "Notes": rec.notes || "",
-    "Added Timestamp": rec.addedTimestamp || new Date().toISOString().replace("T", " ").slice(0, 19),
-  };
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export interface SharePointSyncResult {
@@ -92,10 +64,11 @@ export interface SharePointSyncResult {
 
 /**
  * Direct sync to Microsoft SharePoint / OneDrive Excel DB using sharing link session.
- * 1. Reads existing Excel file from SharePoint.
+ * 1. Reads existing Excel file from SharePoint using ExcelJS.
  * 2. Deduplicates incoming candidate records against existing records.
  * 3. Segregates candidates into worksheets based on their Role (latest job title) + master "All Candidates" sheet.
- * 4. Pushes updated workbook binary back to SharePoint via REST SaveBinaryStream.
+ * 4. Styles top row with bold text, white font, and vibrant solid color assigned to each page.
+ * 5. Pushes updated workbook binary back to SharePoint via REST SaveBinaryStream.
  */
 export async function syncCandidatesToSharePoint(
   shareUrl?: string,
@@ -186,28 +159,45 @@ export async function syncCandidatesToSharePoint(
   let existingRecords: CandidateRecord[] = [];
   if (dlRes.statusCode === 200 && dlRes.body.length > 500) {
     try {
-      const existingWb = XLSX.read(dlRes.body, { type: "buffer" });
+      const existingWb = new ExcelJS.Workbook();
+      await existingWb.xlsx.load(dlRes.body as any);
       const masterSheet =
-        existingWb.Sheets["All Candidates"] ||
-        existingWb.Sheets[existingWb.SheetNames[0]];
+        existingWb.getWorksheet("All Candidates") || existingWb.worksheets[0];
 
-      if (masterSheet) {
-        const rows: any[] = XLSX.utils.sheet_to_json(masterSheet);
-        existingRecords = rows
-          .map((r: any, idx: number) => ({
-            sNo: Number(r["S.No"]) || idx + 1,
-            candidateName: String(r["Candidate Name"] || "").trim(),
-            email: String(r["Email ID"] || "").trim(),
-            contactNumber: String(r["Contact Number"] || "").trim(),
-            roleAppliedFor: String(r["Role Applied For"] || "").trim(),
-            yearsOfExperience: String(r["Years of Experience"] || "").trim(),
-            currentCtc: String(r["Current CTC"] || "").trim(),
-            expectedCtc: String(r["Expected CTC"] || "").trim(),
-            noticePeriod: String(r["Notice Period"] || "").trim(),
-            notes: String(r["Notes"] || "").trim(),
-            addedTimestamp: String(r["Added Timestamp"] || "").trim(),
-          }))
-          .filter((r) => r.candidateName || r.email);
+      if (masterSheet && masterSheet.rowCount > 1) {
+        const headerMap: Record<number, string> = {};
+        masterSheet.getRow(1).eachCell((cell, colNum) => {
+          headerMap[colNum] = String(cell.value || "").trim();
+        });
+
+        masterSheet.eachRow((row, rowNumber) => {
+          if (rowNumber > 1) {
+            const r: Record<string, any> = {};
+            row.eachCell((cell, colNum) => {
+              const h = headerMap[colNum];
+              if (h) r[h] = String(cell.value || "").trim();
+            });
+
+            const candidateName = r["Candidate Name"] || "";
+            const email = r["Email ID"] || "";
+
+            if (candidateName || email) {
+              existingRecords.push({
+                sNo: Number(r["S.No"]) || existingRecords.length + 1,
+                candidateName,
+                email,
+                contactNumber: r["Contact Number"] || "",
+                roleAppliedFor: r["Role Applied For"] || "",
+                yearsOfExperience: r["Years of Experience"] || "",
+                currentCtc: r["Current CTC"] || "",
+                expectedCtc: r["Expected CTC"] || "",
+                noticePeriod: r["Notice Period"] || "",
+                notes: r["Notes"] || "",
+                addedTimestamp: r["Added Timestamp"] || "",
+              });
+            }
+          }
+        });
       }
     } catch (parseErr) {
       console.warn("Could not parse existing workbook, will create fresh:", parseErr);
@@ -249,72 +239,54 @@ export async function syncCandidatesToSharePoint(
     }
   }
 
-  // 6. Build role-segregated workbook
-  const wb = XLSX.utils.book_new();
-  const sheetNames = new Set<string>();
+  // 6. Build styled workbook with bold headers, solid colored top rows, and colored tabs
+  const styledWb = await buildStyledExcelWorkbook(merged);
+  const binaryBuffer = await styledWb.xlsx.writeBuffer();
+  const sheetsCreated = styledWb.worksheets.map((w) => w.name);
 
-  const colWidths = [
-    { wch: 6 },  // S.No
-    { wch: 24 }, // Candidate Name
-    { wch: 30 }, // Email ID
-    { wch: 18 }, // Contact Number
-    { wch: 28 }, // Role Applied For
-    { wch: 18 }, // Years of Experience
-    { wch: 16 }, // Current CTC
-    { wch: 16 }, // Expected CTC
-    { wch: 16 }, // Notice Period
-    { wch: 32 }, // Notes
-    { wch: 22 }, // Added Timestamp
-  ];
-
-  // 6a. Master "All Candidates" Sheet
-  const allRows = merged.map((r, i) => recordToRowObject(r, i));
-  const masterWs = XLSX.utils.json_to_sheet(allRows, { header: EXCEL_COLUMNS });
-  masterWs["!cols"] = colWidths;
-  XLSX.utils.book_append_sheet(wb, masterWs, "All Candidates");
-  sheetNames.add("all candidates");
-
-  // 6b. Role-segregated sheets
-  const roleGroups: { [role: string]: CandidateRecord[] } = {};
-  for (const rec of merged) {
-    const roleKey =
-      (rec.roleAppliedFor || "General / Unassigned").trim() ||
-      "General / Unassigned";
-    if (!roleGroups[roleKey]) {
-      roleGroups[roleKey] = [];
-    }
-    roleGroups[roleKey].push(rec);
-  }
-
-  for (const [roleName, roleItems] of Object.entries(roleGroups)) {
-    const sheetTitle = sanitizeSheetName(roleName, sheetNames);
-    const roleRows = roleItems.map((r, i) => recordToRowObject(r, i));
-    const roleWs = XLSX.utils.json_to_sheet(roleRows, { header: EXCEL_COLUMNS });
-    roleWs["!cols"] = colWidths;
-    XLSX.utils.book_append_sheet(wb, roleWs, sheetTitle);
-  }
-
-  const binaryBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-
-  // 7. Save binary stream back to SharePoint
+  // 7. Save binary stream back to SharePoint (with retry if locked by active edit session)
   const saveUrl = `${siteUrl}/_api/web/GetFileByServerRelativeUrl('${serverRelativeUrl}')/SaveBinaryStream`;
-  const saveRes = await httpRequest(saveUrl, {
-    method: "POST",
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-      "Cookie": cookies,
-      "X-RequestDigest": formDigest,
-      "Content-Type": "application/octet-stream",
-      "Content-Length": String(binaryBuffer.length),
-    },
-    body: binaryBuffer,
-  });
 
-  if (saveRes.statusCode !== 200) {
+  let saveSuccess = false;
+  let lastStatusCode = 0;
+  let lastBody = "";
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const saveRes = await httpRequest(saveUrl, {
+      method: "POST",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Cookie": cookies,
+        "X-RequestDigest": formDigest,
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(binaryBuffer.byteLength),
+      },
+      body: Buffer.from(binaryBuffer),
+    });
+
+    lastStatusCode = saveRes.statusCode;
+    lastBody = saveRes.body.toString("utf-8");
+
+    if (saveRes.statusCode === 200) {
+      saveSuccess = true;
+      break;
+    }
+
+    // HTTP 423 = Locked (user currently editing in Excel Online)
+    if (saveRes.statusCode === 423 && attempt < 3) {
+      await delay(2500);
+    }
+  }
+
+  if (!saveSuccess) {
+    if (lastStatusCode === 423) {
+      throw new Error(
+        "The Excel file is currently open in an active tab in Excel Online (locked for co-authoring). Please close or switch away from the TEST.xlsx browser tab and click 'Export to Excel' again to sync."
+      );
+    }
+
     throw new Error(
-      `SharePoint SaveBinaryStream failed with HTTP status ${saveRes.statusCode}: ${saveRes.body.toString(
-        "utf-8"
-      )}`
+      `SharePoint SaveBinaryStream failed with HTTP status ${lastStatusCode}: ${lastBody}`
     );
   }
 
@@ -323,7 +295,7 @@ export async function syncCandidatesToSharePoint(
     totalRecords: merged.length,
     addedRecords: addedCount,
     duplicateRecords: duplicateCount,
-    sheets: wb.SheetNames,
+    sheets: sheetsCreated,
     serverRelativeUrl,
     fileName,
   };
@@ -389,14 +361,15 @@ export async function testSharePointConnection(shareUrl?: string): Promise<{
 
   if (dlRes.statusCode === 200 && dlRes.body.length > 500) {
     try {
-      const wb = XLSX.read(dlRes.body, { type: "buffer" });
-      sheets = wb.SheetNames;
-      const master = wb.Sheets["All Candidates"] || wb.Sheets[sheets[0]];
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(dlRes.body as any);
+      sheets = wb.worksheets.map((w) => w.name);
+      const master = wb.getWorksheet("All Candidates") || wb.worksheets[0];
       if (master) {
-        recordCount = XLSX.utils.sheet_to_json(master).length;
+        recordCount = Math.max(0, master.rowCount - 1);
       }
     } catch (e) {
-      console.warn("Could not read sheets", e);
+      console.warn("Could not read sheets with ExcelJS", e);
     }
   }
 

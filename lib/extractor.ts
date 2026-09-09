@@ -33,13 +33,23 @@ export async function extractTextFromFileBuffer(
 }
 
 const COMMON_ROLE_PATTERNS = [
+  // E-Commerce & Marketplace roles
+  /(?:E-Commerce|Ecommerce|Marketplace|Amazon|Flipkart|Digital\s+Marketing|PPC|Growth|Performance|Catalog)\s+(?:Specialist|Manager|Executive|Lead|Associate|Analyst|Consultant|Head|Director)/i,
+  // Sales, Business Development, Retail & Operations
+  /(?:Sales|Retail|Store|Operations|Account|Supply\s+Chain|Procurement|Channel\s+Sales|Key\s+Account|Category|Business\s+Development)\s+(?:Manager|Executive|Lead|Director|Associate|Specialist|Officer|Head|Consultant)/i,
+  // Engineering & Tech roles
   /Senior\s+[A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Designer|Manager|Architect|Consultant)/i,
   /Lead\s+[A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Designer|Manager|Architect|Consultant)/i,
   /Staff\s+[A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Designer|Manager|Architect|Consultant)/i,
   /Principal\s+[A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Designer|Manager|Architect|Consultant)/i,
-  /(?:Software|Full\s*Stack|Frontend|Backend|DevOps|Cloud|Data|Machine\s*Learning|ML|AI|Product|Project|Security|QA)\s+(?:Engineer|Developer|Scientist|Analyst|Manager|Architect|Lead|Specialist)/i,
+  /(?:Software|Full\s*Stack|Frontend|Backend|DevOps|Cloud|Data|Machine\s*Learning|ML|AI|Security|QA)\s+(?:Engineer|Developer|Scientist|Analyst|Manager|Architect|Lead|Specialist)/i,
+  // Product & Design
   /(?:UI\/UX|Product|Graphic)\s+Designer/i,
-  /(?:Engineering|Product|Project|Operations|Marketing|Sales)\s+Manager/i,
+  /(?:Product|Project|Program)\s+Manager/i,
+  // General professional designations
+  /(?:Marketing|Operations|Sales|General|Brand|Store|Area|Regional)\s+Manager/i,
+  /(?:Sales|Marketing|Operations|Retail|Accounts)\s+Executive/i,
+  /(?:Operations|Logistics|Warehouse|Inventory)\s+(?:Manager|Supervisor|Executive|Lead)/i,
 ];
 
 export function parseResumeWithHeuristics(rawText: string): ParsedCandidateData {
@@ -65,10 +75,29 @@ export function parseResumeWithHeuristics(rawText: string): ParsedCandidateData 
     }
   }
 
-  // 4. Role heuristic (Extracts applied role or latest/current job title)
+  // 4. Role extraction: 2-step hierarchy
   let roleAppliedFor = "";
-  // Priority 1: Check lines near top (candidate headline / objective / target role)
-  for (const line of lines.slice(0, 8)) {
+
+  // STEP 1: Check the TOP SECTION (lines 1 to 8 right below/around candidate name)
+  for (const line of lines.slice(0, 10)) {
+    // Check if subtitle contains separator like "Name | Role"
+    if (line.includes("|") || line.includes("•") || line.includes("-") || line.includes("–")) {
+      const segments = line.split(/[\s\t]*[|•·\-\–][\s\t]*/);
+      for (const seg of segments) {
+        for (const pattern of COMMON_ROLE_PATTERNS) {
+          const m = seg.match(pattern);
+          if (m) {
+            roleAppliedFor = m[0].trim();
+            break;
+          }
+        }
+        if (roleAppliedFor) break;
+      }
+    }
+
+    if (roleAppliedFor) break;
+
+    // Check full line against role patterns
     for (const pattern of COMMON_ROLE_PATTERNS) {
       const match = line.match(pattern);
       if (match) {
@@ -79,24 +108,40 @@ export function parseResumeWithHeuristics(rawText: string): ParsedCandidateData 
     if (roleAppliedFor) break;
   }
 
-  // Priority 2: Check work experience / employment section for the latest (first listed) designation
+  // STEP 2: If NOT found in Top section, check the EXPERIENCE SECTION for the latest/current role
   if (!roleAppliedFor) {
     const expSectionMatch = rawText.match(
-      /(?:Work\s+Experience|Experience|Employment\s+History|Professional\s+Experience)[:\s]+([\s\S]{1,1200})/i
+      /(?:Work\s+Experience|Professional\s+Experience|Experience|Employment\s+History|Career\s+History)[:\s]+([\s\S]{1,1500})/i
     );
     if (expSectionMatch) {
       const expSnippet = expSectionMatch[1];
-      for (const pattern of COMMON_ROLE_PATTERNS) {
-        const match = expSnippet.match(pattern);
-        if (match) {
-          roleAppliedFor = match[0].trim();
-          break;
+      // Search line by line in the first experience entry
+      const expLines = expSnippet.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      for (const line of expLines.slice(0, 8)) {
+        for (const pattern of COMMON_ROLE_PATTERNS) {
+          const match = line.match(pattern);
+          if (match) {
+            roleAppliedFor = match[0].trim();
+            break;
+          }
+        }
+        if (roleAppliedFor) break;
+      }
+
+      // If line-by-line didn't match, check entire expSnippet
+      if (!roleAppliedFor) {
+        for (const pattern of COMMON_ROLE_PATTERNS) {
+          const match = expSnippet.match(pattern);
+          if (match) {
+            roleAppliedFor = match[0].trim();
+            break;
+          }
         }
       }
     }
   }
 
-  // Priority 3: Search throughout rawText
+  // STEP 3: Fallback search throughout the resume text
   if (!roleAppliedFor) {
     for (const pattern of COMMON_ROLE_PATTERNS) {
       const match = rawText.match(pattern);
@@ -139,11 +184,12 @@ export async function parseResumeWithGemini(
   apiKey: string
 ): Promise<ParsedCandidateData> {
   const prompt = `You are an expert HR recruitment assistant. Extract structured candidate information from the following resume text.
+
 CRITICAL INSTRUCTIONS FOR "roleAppliedFor":
-- Extract the candidate's current or most recent job title / professional role (e.g. 'Senior Full Stack Engineer', 'Lead Data Scientist', 'Full Stack Developer', 'DevOps Specialist', 'Product Manager', 'Cloud Architect').
-- In resumes, the most recent job is typically listed first under "Experience" or "Work History", or stated in their headline/summary.
-- Extract this exact latest role held by the candidate so the system can segregate the candidate into that role's sheet in Excel.
-- Clean and normalize the title (e.g. "Lead Data Scientist", "Senior Full Stack Engineer").
+Follow this strict 2-step priority hierarchy:
+1. STEP 1 (TOP SECTION): Look at the top section of the resume (the lines right below or near the candidate's name, their subtitle, header, or summary/objective). Candidates often state their designation right at the top (e.g., "Amazon Marketplace Specialist", "E-Commerce Account Manager", "Marketing Manager", "Sales Manager", "Full Stack Developer", "Operations Manager", "Store Operations Executive"). If a designation/title is mentioned in the top section, extract that exact role!
+2. STEP 2 (EXPERIENCE SECTION): If they did NOT mention a designation in the top section in the beginning, navigate to their "Work Experience", "Experience", or "Employment History" section. Extract the candidate's LATEST / CURRENT role (the very first listed job title in their experience history).
+3. NEVER default to any hardcoded designation like "Full Stack Developer". Extract the candidate's real profession. If completely unspecified, return "".
 
 If a field is not explicitly mentioned or cannot be inferred, return an empty string "".
 
@@ -157,7 +203,7 @@ Provide your answer ONLY in valid JSON matching this exact structure:
   "candidateName": "Full candidate name",
   "email": "candidate email address",
   "contactNumber": "phone number",
-  "roleAppliedFor": "current or most recent designation / primary job role",
+  "roleAppliedFor": "designation from top section or latest role from experience",
   "yearsOfExperience": "number of years or range, e.g. '5' or '7+'",
   "currentCtc": "current salary if stated or ''",
   "expectedCtc": "expected salary if stated or ''",

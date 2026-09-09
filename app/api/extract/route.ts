@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
           candidateName: parsed.candidateName || file.name.replace(/\.[^/.]+$/, ""),
           email: parsed.email || "",
           contactNumber: parsed.contactNumber || "",
-          roleAppliedFor: parsed.roleAppliedFor || "Full Stack Developer",
+          roleAppliedFor: parsed.roleAppliedFor || "General",
           yearsOfExperience: parsed.yearsOfExperience || "",
           currentCtc: parsed.currentCtc || "",
           expectedCtc: parsed.expectedCtc || "",
